@@ -14,11 +14,11 @@ def update_Q_and_accR(Accumulated_reward, total_reward, reward, k, Q_a, alpha):
     return total_reward, Accumulated_reward, Q_a
 
 
-def e_greedy_algorithm(epsilon, a):
+def e_greedy_algorithm(epsilon, a, init):
     # initialize estimate of each lever as 0
     num_steps = 1000
-    Q_a1 = 0
-    Q_a2 = 0
+    Q_a1 = init[0]
+    Q_a2 = init[1]
     Accumulated_reward = [0] * num_steps
     total_reward = 0
 
@@ -81,6 +81,7 @@ def e_greedy_algorithm(epsilon, a):
     return Accumulated_reward, Q_a1, Q_a2
 
 def main():
+    # PART 1: e-greedy algorithm
     epsilon = [0, 0.1, 0.2, 0.5]
     num_runs = 100
     # create x-axis
@@ -105,7 +106,7 @@ def main():
             # repeat for 100 independent runs 
             for runs in range(num_runs):
                 # call e-greedy function
-                Accumulated_reward, Q_a1, Q_a2 = e_greedy_algorithm(epsilon[j], i+1)
+                Accumulated_reward, Q_a1, Q_a2 = e_greedy_algorithm(epsilon[j], i+1, init=[0,0])
                 Q_a1_list[runs] = Q_a1
                 Q_a2_list[runs] = Q_a2
                 for k in range(1000):
@@ -120,13 +121,56 @@ def main():
             plt.xlabel('Time (t)')
             plt.ylabel('Average Accumulated Reward')
             plt.title('Average Accumulated Reward for Different e-greedy Values and Learning Rates')
-            plt.legend(['e = 0', 'e = 0.1', 'e = 0.2', 'e = 0.5'])
-            plt.plot(time_array, Average_reward)
+            plt.plot(time_array, Average_reward, label=f'e = {epsilon[j]}')
             # Display average of action value Q(a1) and Q(a2) after 100 runs 
             print("Average of Q(a1) for e =", epsilon[j], ": ", Q_a1_mean)
             print("Average of Q(a2) for e =", epsilon[j], ": ", Q_a2_mean)
 
+        plt.legend()
         plt.show()
+    
+    # PART 2: Optimistic Initialization 
+    alpha = 0.1
+    e = 0.1
+    for optimistic in range(3):
+        total_reward = [0] * 1000
+        Q_a1_list = [0]*100
+        Q_a2_list = [0]*100
+        for runs in range(num_runs):
+            if optimistic == 0:
+                init= [0, 0]
+                Accumulated_reward, Q_a1, Q_a2 = e_greedy_algorithm(e, alpha, init) # initialize to [0,0]
+                Q_a1_list[runs] = Q_a1
+                Q_a2_list[runs] = Q_a2
+            elif optimistic == 1:
+                init = [8, 11]
+                Accumulated_reward, Q_a1, Q_a2 = e_greedy_algorithm(e, alpha, init) # initialize to [8,11]
+                Q_a1_list[runs] = Q_a1
+                Q_a2_list[runs] = Q_a2
+            else:
+                init = [20, 20]
+                Accumulated_reward, Q_a1, Q_a2 = e_greedy_algorithm(e, alpha, init) # initialize to [20,20]
+                Q_a1_list[runs] = Q_a1
+                Q_a2_list[runs] = Q_a2
+            for k in range(1000):
+                    # sum accumulated reward over all runs 
+                    total_reward[k] = total_reward[k] + Accumulated_reward[k]
+        # calculate the average of 100 runs using the summed accumulared reward
+        Average_reward = [element / 100 for element in total_reward]
+        # calculate the average action value of Q(a1) and Q(a2) after 100 runs 
+        Q_a1_mean = np.mean(Q_a1_list)
+        Q_a2_mean = np.mean(Q_a2_list)
+
+        plt.xlabel('Time (t)')
+        plt.ylabel('Average Accumulated Reward')
+        plt.title('Average Accumulated Reward for Different optimistic initializations')
+        plt.plot(time_array, Average_reward, label=f'Q = {init}')
+        print(" ")
+        print("Average of Q(a1) for optimistic initialization: [", init[0], " " , init[1], "]:", Q_a1_mean)
+        print("Average of Q(a2) for optimistic initialization: [", init[0], " " , init[1], "]:", Q_a2_mean)
+    
+    plt.legend()
+    plt.show()
         
 if __name__ == "__main__":
     main()
