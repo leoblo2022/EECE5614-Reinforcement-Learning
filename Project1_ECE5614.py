@@ -5,15 +5,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # this helper function updates the estimate of Q_at and also tracks accumulated reward
-def update_Q_and_accR(Accumulated_reward, total_reward, reward, k, Q_a, alpha):
+def update_Q_and_accR(Accumulated_reward, total_reward, reward, k, Q_a, alpha, gradient):
     # track accumulated reward 
     total_reward = total_reward + reward
     Accumulated_reward[k] = (1/(k+1))*total_reward
     # update current estimate of Q(a1)
-    Q_a = Q_a + alpha*(reward - Q_a)
+    if gradient == 0: # is e-greedy algorithm (not gradient-bandit)
+        Q_a = Q_a + alpha*(reward - Q_a)
+    else: 
+        Q_a = 0 # is gradient-bandit policy, don't need previous Q_a
     return total_reward, Accumulated_reward, Q_a
 
-
+# e-GREEDY ACTION-SELECTION FUNCTION
 def e_greedy_algorithm(epsilon, a, init):
     # initialize estimate of each lever as 0
     num_steps = 1000
@@ -41,7 +44,7 @@ def e_greedy_algorithm(epsilon, a, init):
                 # draw a reward value based on the true Q(a1) distribution
                 reward_1 = np.random.normal(8, math.sqrt(20))
                 # update Q_a estimare and track accumulated reward
-                total_reward, Accumulated_reward, Q_a1 = update_Q_and_accR(Accumulated_reward, total_reward, reward_1, k, Q_a1, alpha)
+                total_reward, Accumulated_reward, Q_a1 = update_Q_and_accR(Accumulated_reward, total_reward, reward_1, k, Q_a1, alpha, 0)
 
 
             # if Q(a2) is currently the higher estimate 
@@ -52,13 +55,13 @@ def e_greedy_algorithm(epsilon, a, init):
                     # draw a reward from the first Gaussian mixture 
                     reward_2 = np.random.normal(8, math.sqrt(15))
                     # update Q_a estimare and track accumulated reward
-                    total_reward, Accumulated_reward, Q_a2 = update_Q_and_accR(Accumulated_reward, total_reward, reward_2, k, Q_a2, alpha)
+                    total_reward, Accumulated_reward, Q_a2 = update_Q_and_accR(Accumulated_reward, total_reward, reward_2, k, Q_a2, alpha, 0)
 
                 else:
                     # draw a reward from the second  Gaussian mixture 
                     reward_2  = np.random.normal(14, math.sqrt(10))
                     # update Q_a estimare and track accumulated reward
-                    total_reward, Accumulated_reward, Q_a2 = update_Q_and_accR(Accumulated_reward, total_reward, reward_2, k, Q_a2, alpha)
+                    total_reward, Accumulated_reward, Q_a2 = update_Q_and_accR(Accumulated_reward, total_reward, reward_2, k, Q_a2, alpha, 0)
 
         # else with probability epsilon (EXPLORATION)
         else: 
@@ -66,20 +69,21 @@ def e_greedy_algorithm(epsilon, a, init):
             if  random.random() > 0.5:
                 reward_1 = np.random.normal(loc=8, scale=math.sqrt(20))
                 # update Q_a estimare and track accumulated reward
-                total_reward, Accumulated_reward, Q_a1 = update_Q_and_accR(Accumulated_reward, total_reward, reward_1, k, Q_a1, alpha)
+                total_reward, Accumulated_reward, Q_a1 = update_Q_and_accR(Accumulated_reward, total_reward, reward_1, k, Q_a1, alpha, 0)
             else:
                 if np.random.choice([True, False]):
                     # draw a reward from the first Gaussian mixture 
                     reward_2 = np.random.normal(8, math.sqrt(15))
                     # update Q_a estimare and track accumulated reward
-                    total_reward, Accumulated_reward, Q_a2 = update_Q_and_accR(Accumulated_reward, total_reward, reward_2, k, Q_a2, alpha)
+                    total_reward, Accumulated_reward, Q_a2 = update_Q_and_accR(Accumulated_reward, total_reward, reward_2, k, Q_a2, alpha, 0)
                 else:
                     # draw a reward from the second  Gaussian mixture 
                     reward_2  = np.random.normal(14, math.sqrt(10))
                     # update Q_a estimare and track accumulated reward
-                    total_reward, Accumulated_reward, Q_a2 = update_Q_and_accR(Accumulated_reward, total_reward, reward_2, k, Q_a2, alpha)
+                    total_reward, Accumulated_reward, Q_a2 = update_Q_and_accR(Accumulated_reward, total_reward, reward_2, k, Q_a2, alpha, 0)
     return Accumulated_reward, Q_a1, Q_a2
 
+# OPTIMISIC INITIALIZATION FUNCTION
 def optimistic_initialization(e, alpha, optim):
     total_reward = [0] * 1000
     Q_a1_list = [0]*100
@@ -104,9 +108,42 @@ def optimistic_initialization(e, alpha, optim):
     Q_a1_mean = np.mean(Q_a1_list)
     Q_a2_mean = np.mean(Q_a2_list)
     return Average_reward, Q_a1_mean, Q_a2_mean, init
-        
 
+# GRADIENT-BANDIT POLICY FUNCTION
+def gradient_bandit(H_a1, H_a2, alpha, k, total_reward, Accumulated_reward):
+    # calculate policy probabilities
+    pi_a1 = (math.e**H_a1 / (math.e**H_a1 + math.e**H_a2))
+    pi_a2 = (math.e**H_a2 / (math.e**H_a1 + math.e**H_a2))
+    # select next action based on policy probabilities 
+    if random.random() < pi_a1: 
+        # select a_1 as action
+        # draw reward from a_1 
+        reward = np.random.normal(8, math.sqrt(20))
+        # calculated accumulated average reward
+        total_reward, Accumulated_reward, Q_a2 = update_Q_and_accR(Accumulated_reward, total_reward, reward, k, 0, alpha, 1)
+        # update preferences, where a1 is selected action 
+        H_a1 = H_a1 + alpha*(reward-Accumulated_reward[k])*(1-pi_a1)
+        H_a2 = H_a2 - alpha*(reward-Accumulated_reward[k])*(pi_a2)
+    else:
+        # select a_2 as action
+        # draw reward from a_2 (need to implement)
+        if np.random.choice([True, False]):
+            # draw a reward from the first Gaussian mixture 
+            reward = np.random.normal(8, math.sqrt(15))
+            # update Q_a estimare and track accumulated reward
+            total_reward, Accumulated_reward, Q_a2 = update_Q_and_accR(Accumulated_reward, total_reward, reward, k, 0, alpha, 1)
+        else:
+            # draw a reward from the second  Gaussian mixture 
+            reward  = np.random.normal(14, math.sqrt(10))
+            total_reward, Accumulated_reward, Q_a2 = update_Q_and_accR(Accumulated_reward, total_reward, reward, k, 0, alpha, 1)
+        # update preferences, where a2 is selected action 
+        H_a2 = H_a2 + alpha*(reward-Accumulated_reward[k])*(1-pi_a2)
+        H_a1 = H_a1 - alpha*(reward-Accumulated_reward[k])*(pi_a1)
+    return H_a1, H_a2, total_reward, Accumulated_reward
+
+###########################################################################################################################
 def main():
+    
     # PART 1: e-greedy algorithm
     epsilon = [0, 0.1, 0.2, 0.5]
     num_runs = 100
@@ -172,6 +209,20 @@ def main():
     plt.legend()
     plt.show()
         
+    #############################################################################################################
+
+    # Part 3: Gradient-Bandit Policy
+    alpha = 0.1
+    num_runs = 100
+    num_steps = 1000
+    H_a1 = 0
+    H_a2 = 0
+    total_reward = 0
+    Accumulated_reward = [0] * 1000
+    for k in range(num_steps):
+        H_a1, H_a2, total_reward, Accumulated_reward = gradient_bandit(H_a1, H_a2, alpha, k, total_reward, Accumulated_reward)
+        
+
 if __name__ == "__main__":
     main()
 
