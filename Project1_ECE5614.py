@@ -112,8 +112,8 @@ def optimistic_initialization(e, alpha, optim):
 # GRADIENT-BANDIT POLICY FUNCTION
 def gradient_bandit(H_a1, H_a2, alpha, k, total_reward, Accumulated_reward):
     # calculate policy probabilities
-    pi_a1 = (math.e**H_a1 / (math.e**H_a1 + math.e**H_a2))
-    pi_a2 = (math.e**H_a2 / (math.e**H_a1 + math.e**H_a2))
+    pi_a1 = (np.exp(H_a1) / (np.exp(H_a1) + np.exp(H_a2)))
+    pi_a2 = 1-pi_a1
     # select next action based on policy probabilities 
     if random.random() < pi_a1: 
         # select a_1 as action
@@ -175,12 +175,12 @@ def main():
                 for k in range(1000):
                     # sum accumulated reward over all runs 
                     total_reward[k] = total_reward[k] + Accumulated_reward[k]
-            # calculate the average of 100 runs using the summed accumulared reward
+            # calculate the average of 100 runs using the summed accumulated reward
             Average_reward = [element / 100 for element in total_reward]
             # calculate the average action value of Q(a1) and Q(a2) after 100 runs 
             Q_a1_mean = np.mean(Q_a1_list)
             Q_a2_mean = np.mean(Q_a2_list)
-        # produce plots here
+            # produce plots here
             plt.xlabel('Time (t)')
             plt.ylabel('Average Accumulated Reward')
             plt.title('Average Accumulated Reward for Different e-greedy Values and Learning Rates')
@@ -215,13 +215,31 @@ def main():
     alpha = 0.1
     num_runs = 100
     num_steps = 1000
-    H_a1 = 0
-    H_a2 = 0
-    total_reward = 0
-    Accumulated_reward = [0] * 1000
-    for k in range(num_steps):
-        H_a1, H_a2, total_reward, Accumulated_reward = gradient_bandit(H_a1, H_a2, alpha, k, total_reward, Accumulated_reward)
-        
+    global_reward = [0]*1000
+    total_reward_greedy = [0]*1000
+    for runs in range(num_runs):
+        H_a1 = 0
+        H_a2 = 0
+        total_reward = 0
+        Accumulated_reward = [0] * 1000
+        Accumulated_reward_greedy, Q_a1, Q_a2 = e_greedy_algorithm(0.1, 0.1, init=[0,0])
+        for k in range(num_steps):
+            H_a1, H_a2, total_reward, Accumulated_reward = gradient_bandit(H_a1, H_a2, alpha, k, total_reward, Accumulated_reward)
+            global_reward[k] = global_reward[k] + Accumulated_reward[k]
+            total_reward_greedy[k] = total_reward_greedy[k] + Accumulated_reward_greedy[k]
+    # calculate the average of 100 runs using the summed accumulated reward
+    Average_reward = [element / 100 for element in global_reward]
+    # calculate the average of 100 runs using the summed accumulated reward
+    Average_reward_greedy = [element / 100 for element in total_reward_greedy]
+    # produce plots here
+    plt.xlabel('Time (t)')
+    plt.ylabel('Average Accumulated Reward')
+    plt.title('Average Accumulated Reward for Gradient-Bandit Policy vs. e-Greedy Policy')
+    plt.plot(time_array, Average_reward, label='Gradient-Bandit Policy')
+    plt.plot(time_array, Average_reward_greedy, label='e-Greedy Policy')
+    plt.legend()
+    plt.show()
+          
 
 if __name__ == "__main__":
     main()
