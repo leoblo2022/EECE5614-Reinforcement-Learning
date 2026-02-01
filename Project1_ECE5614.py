@@ -34,8 +34,10 @@ def e_greedy_algorithm(epsilon, a, init):
             alpha = 0.9**(k+1)
         elif a==3:
             alpha = 1/(1+math.log(1+(k+1))) 
-        else:
+        elif a==4:
             alpha = 1/(k+1)
+        else:
+            alpha = 0.1
 
         # with probability 1-epsilon (EXPLOITATION)
         if random.random() > e: 
@@ -165,6 +167,47 @@ def upper_confidence_bound(Q_a1, Q_a2, c, k, N_a1, N_a2, total_reward, Accumulat
         total_reward, Accumulated_reward, num = update_Q_and_accR(Accumulated_reward, total_reward, reward, k, 0, 0, 1)
     return Q_a1, Q_a2, N_a1, N_a2, total_reward, Accumulated_reward
 
+def calculate_average_accum_reward(policy_type):
+    # Part 4: Upper Confidence Bound Policy (UCB)
+    alpha = 0.1
+    c=5
+    num_runs = 100
+    num_steps = 1000
+    global_reward = [0]*1000
+    time_array = list(range(1, 1001))
+    for run in range(num_runs):
+        N_a1 = 1
+        N_a2 = 1
+        Q_a1 = 0
+        Q_a2 = 0
+        H_a1 = 0
+        H_a2 = 0
+        total_reward = 0
+        Accumulated_reward = [0] * 1000
+        if policy_type == 1:
+            Accumulated_reward_greedy, Q_a1, Q_a2 = e_greedy_algorithm(0.1, 0.1, init=[0,0])
+        for k in range(num_steps):
+            if policy_type == 1:
+                global_reward[k] = global_reward[k] + Accumulated_reward_greedy[k]
+            elif policy_type == 2:
+                H_a1, H_a2, total_reward, Accumulated_reward = gradient_bandit(H_a1, H_a2, alpha, k, total_reward, Accumulated_reward)
+                global_reward[k] = global_reward[k] + Accumulated_reward[k]
+            elif policy_type == 3:
+                Q_a1, Q_a2, N_a1, N_a2, total_reward, Accumulated_reward = upper_confidence_bound(Q_a1, Q_a2, c, k, N_a1, N_a2, total_reward, Accumulated_reward)
+                global_reward[k] = global_reward[k] + Accumulated_reward[k]
+    # calculate the average of 100 runs using the summed accumulated reward
+    Average_reward = [element / 100 for element in global_reward]
+    # calculate the average of 100 runs using the summed accumulated reward      
+    plt.xlabel('Time (t)')
+    plt.ylabel('Average Accumulated Reward')
+    plt.title('Average Accumulated Reward for policies')
+    if policy_type == 1:
+        plt.plot(time_array, Average_reward, label='e-Greedy')
+    elif policy_type == 2:
+        plt.plot(time_array, Average_reward, label='Gradient_bandit')
+    elif policy_type == 3:      
+        plt.plot(time_array, Average_reward, label='Upper Confidence Bound (UCB)')
+
 ###########################################################################################################################
 def main():
     
@@ -236,6 +279,8 @@ def main():
     #############################################################################################################
 
     # Part 3: Gradient-Bandit Policy
+    print(" ")
+    print("Plotting Gradient-Bandit Policy compared to e-greedy")
     alpha = 0.1
     num_runs = 100
     num_steps = 1000
@@ -264,15 +309,18 @@ def main():
     plt.legend()
     plt.show()
 
-########################################################################################################################
+
+    ########################################################################################################################
 
     # Part 4: Upper Confidence Bound Policy (UCB)
+    print(" ")
+    print("Plotting UCB policies with different exploration rates c")
     num_runs = 100
     num_steps = 1000
     c_list = [2, 5, 100]
     for i in range(3):
         global_reward = [0]*1000
-        c = c_list[i] # select value for c   
+        c = c_list[i] # select value for exploration rate c   
         for runs in range(num_runs):
             N_a1 = 1
             N_a2 = 1
@@ -293,6 +341,17 @@ def main():
     plt.legend()
     plt.show()
 
+    print(" ")
+    print("Plotting e-greedy")
+    calculate_average_accum_reward(1)
+    print(" ")
+    print("Plotting gradient-bandit")
+    calculate_average_accum_reward(2)
+    print(" ")
+    print("Plotting UCB policy")
+    calculate_average_accum_reward(3)
+    plt.legend()
+    plt.show()
 
 if __name__ == "__main__":
     main()
