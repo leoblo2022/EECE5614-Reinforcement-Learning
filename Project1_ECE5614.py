@@ -5,15 +5,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # this helper function updates the estimate of Q_at and also tracks accumulated reward
-def update_Q_and_accR(Accumulated_reward, total_reward, reward, k, Q_a, alpha, gradient):
+def update_Q_and_accR(Accumulated_reward, total_reward, reward, k, Q_a, alpha, policy_type):
     # track accumulated reward 
     total_reward = total_reward + reward
     Accumulated_reward[k] = (1/(k+1))*total_reward
     # update current estimate of Q(a1)
-    if gradient == 0: # is e-greedy algorithm (not gradient-bandit)
+    if policy_type == 0: # is e-greedy algorithm (not gradient-bandit)
         Q_a = Q_a + alpha*(reward - Q_a)
     else: 
-        Q_a = 0 # is gradient-bandit policy, don't need previous Q_a
+        Q_a = 0 # is gradient-bandit or UCB policy, don't need previous Q_a
     return total_reward, Accumulated_reward, Q_a
 
 # e-GREEDY ACTION-SELECTION FUNCTION
@@ -141,6 +141,30 @@ def gradient_bandit(H_a1, H_a2, alpha, k, total_reward, Accumulated_reward):
         H_a1 = H_a1 - alpha*(reward-Accumulated_reward[k])*(pi_a1)
     return H_a1, H_a2, total_reward, Accumulated_reward
 
+# Upper Confidence Bound (UCB) Policy Function
+def upper_confidence_bound(Q_a1, Q_a2, c, k, N_a1, N_a2, total_reward, Accumulated_reward):
+    # select action
+    action = np.argmax([Q_a1+(c*math.sqrt((math.log(k+1))/(N_a1))), Q_a2+(c*math.sqrt((math.log(k+1))/(N_a2)))])
+    # if action 1 is selected
+    if action == 0:
+        reward = np.random.normal(8, math.sqrt(20))
+        Q_a1 = Q_a1 + (1/N_a1)*(reward - Q_a1)
+        N_a1 = N_a1 + 1
+        total_reward, Accumulated_reward, num = update_Q_and_accR(Accumulated_reward, total_reward, reward, k, 0, 0, 1)
+    # if action 2 is selected
+    else:
+        if np.random.choice([True, False]):
+            # draw a reward from the first Gaussian mixture 
+            reward = np.random.normal(8, math.sqrt(15))
+        else:
+            # draw a reward from the second  Gaussian mixture 
+            reward  = np.random.normal(14, math.sqrt(10))
+        # update preferences, where a2 is selected action 
+        Q_a2 = Q_a2 + (1/N_a2)*(reward - Q_a2)
+        N_a2 = N_a2 + 1
+        total_reward, Accumulated_reward, num = update_Q_and_accR(Accumulated_reward, total_reward, reward, k, 0, 0, 1)
+    return Q_a1, Q_a2, N_a1, N_a2, total_reward, Accumulated_reward
+
 ###########################################################################################################################
 def main():
     
@@ -239,7 +263,36 @@ def main():
     plt.plot(time_array, Average_reward_greedy, label='e-Greedy Policy')
     plt.legend()
     plt.show()
-          
+
+########################################################################################################################
+
+    # Part 4: Upper Confidence Bound Policy (UCB)
+    num_runs = 100
+    num_steps = 1000
+    c_list = [2, 5, 100]
+    for i in range(3):
+        global_reward = [0]*1000
+        c = c_list[i] # select value for c   
+        for runs in range(num_runs):
+            N_a1 = 1
+            N_a2 = 1
+            Q_a1 = 0
+            Q_a2 = 0
+            total_reward = 0
+            Accumulated_reward = [0] * 1000
+            for k in range(num_steps):
+                Q_a1, Q_a2, N_a1, N_a2, total_reward, Accumulated_reward = upper_confidence_bound(Q_a1, Q_a2, c, k, N_a1, N_a2, total_reward, Accumulated_reward)
+                global_reward[k] = global_reward[k] + Accumulated_reward[k]
+        # calculate the average of 100 runs using the summed accumulated reward
+        Average_reward = [element / 100 for element in global_reward]
+        # calculate the average of 100 runs using the summed accumulated reward      
+        plt.xlabel('Time (t)')
+        plt.ylabel('Average Accumulated Reward')
+        plt.title('Average Accumulated Reward for Different UCB policies')
+        plt.plot(time_array, Average_reward, label=f'c={c_list[i]}')
+    plt.legend()
+    plt.show()
+
 
 if __name__ == "__main__":
     main()
