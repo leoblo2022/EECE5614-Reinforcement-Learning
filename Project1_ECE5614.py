@@ -167,6 +167,7 @@ def upper_confidence_bound(Q_a1, Q_a2, c, k, N_a1, N_a2, total_reward, Accumulat
         total_reward, Accumulated_reward, num = update_Q_and_accR(Accumulated_reward, total_reward, reward, k, 0, 0, 1)
     return Q_a1, Q_a2, N_a1, N_a2, total_reward, Accumulated_reward
 
+# This helper function takes any policy and tracks average accumulated reward, and plots it 
 def calculate_average_accum_reward(policy_type):
     # Part 4: Upper Confidence Bound Policy (UCB)
     alpha = 0.1
@@ -341,6 +342,7 @@ def main():
     plt.legend()
     plt.show()
 
+    # Compare UCB to the best e-greedy and gradient bandit, plotted together
     print(" ")
     print("Plotting e-greedy")
     calculate_average_accum_reward(1)
