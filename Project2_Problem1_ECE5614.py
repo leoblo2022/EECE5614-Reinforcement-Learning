@@ -3,6 +3,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
+import random
 
 # GLOBAL VARIABLES
 # Matrix is defined as 20x20 instead of 18x18 stated in the project description in order to treat borders as wall states
@@ -120,46 +121,21 @@ def get_transitions(state, action, p):
         (p/2, next_up),
         (p/2, next_down)
         ]
-    
 
-def main():
-
-    
-    plt.subplots(figsize=(10,7.5))
-    heatmap = sns.heatmap(State_Matrix, fmt=".2f", linewidths=0.25, linecolor='black',
-                      cbar= False, cmap= 'rocket_r', vmin=0, vmax=255)
-    heatmap.set_facecolor('black') # Color for the NaN cells in the state matrix
-    plt.title('Maze Problem')
-
-    # color blocks for visualization purposes
-    coloring_blocks(heatmap, oil_states, bump_states, start_state, goal_state)
-    plt.show()
-
-    p = 0.02 #probability
-    gamma = 0.99
-    theta = 0.01 #convergence criteria 
-
-    # determine location (indices) and number of valid states (anything but walls)
-    states = []
-    state_index = {}
-    for i in range(State_Matrix.shape[0]):
-        for j in range(State_Matrix.shape[1]):
-            if not np.isnan(State_Matrix[i,j]): # if the cell is not a wall, record its index and add it to a list of valid states
-                idx = len(states)
-                states.append((i,j))
-                state_index[(i,j)] = idx
+def Policy_Iteration(states, state_index, p, gamma, theta):
 
     n_states = len(states)
-
-
     # Initial random policy (pi_0) to all left
     policy = np.array(['L'] * n_states)
 
     # POLICY ITERATION (Vector Form) 
     converged = False
+    iteration_count = 0
+    T_max = 400
 
     while not converged:
-
+        iteration_count +=1 #keep track of number of iterations
+        
         # Step 1: POLICY EVALUATION (Approximate method, which is better for large state spaces)
         V = np.zeros(n_states) #initialize as vector Sx1
 
@@ -234,6 +210,7 @@ def main():
 
 
     # VISUALIZE RESULTS
+    print("Iteration Count: ", iteration_count)
     # Create a fresh matrix for plotting the values
     # plot the value function values on the heat map
     plt.subplots(figsize=(13,7.5))
@@ -246,7 +223,7 @@ def main():
 
     # Plot the new heatmap of the new value function values with the original state and coloring blocks
     heatmap = sns.heatmap(Value_Matrix, fmt=".2f", annot= Value_Matrix, linewidths=0.25, linecolor='black',
-                        cbar= False, cmap= 'rocket_r', annot_kws={"size": 6})
+                        cbar= False, cmap= 'rocket_r', annot_kws={"size": 8})
 
     heatmap.set_facecolor('black') # Color for the NA cells in the state matrix
     coloring_blocks(heatmap, oil_states, bump_states, start_state, goal_state)
@@ -301,6 +278,85 @@ def main():
 
     plt.title("Optimal Path")
     plt.show()
+
+    return policy
+
+# This function simulates the execution of the optimal policy using sampled state transitions
+def simulate_episode(policy, start_state, state_index, p, Tmax):
+    
+    state = start_state
+    trajectory = []
+    total_reward = 0
+    
+    # max limit is 400 steps
+    for t in range(Tmax):
+        
+        # terminate if goal state is reached 
+        if state == goal_state:
+            break
+        
+        # get the appropriate action for each state 
+        action = policy[state_index[state]]
+        
+        transitions = get_transitions(state, action, p) # p(s'|a,s)
+        
+        # Sample next state using probabilities
+        # example, probs = [0.90, 0.05, 0,05]
+        probs = [prob for prob, _ in transitions]
+        # get possible next states 
+        next_states = [next_s for _, next_s in transitions]
+        
+        # based on probabilities, get next state 
+        next_state = random.choices(next_states, weights=probs)[0]
+        
+        reward = get_reward(state, next_state)
+        # keep track of total reward
+        total_reward += reward
+        
+        trajectory.append((state, action)) # keep track of trajectory of states
+        
+        # update states
+        state = next_state
+    
+    return trajectory, total_reward
+
+
+def main():
+    
+    plt.subplots(figsize=(10,7.5))
+    heatmap = sns.heatmap(State_Matrix, fmt=".2f", linewidths=0.25, linecolor='black',
+                      cbar= False, cmap= 'rocket_r', vmin=0, vmax=255)
+    heatmap.set_facecolor('black') # Color for the NaN cells in the state matrix
+    plt.title('Maze Problem')
+
+    # color blocks for visualization purposes
+    coloring_blocks(heatmap, oil_states, bump_states, start_state, goal_state)
+    plt.show()
+
+    # determine location (indices) and number of valid states (anything but walls)
+    states = []
+    state_index = {}
+    for i in range(State_Matrix.shape[0]):
+        for j in range(State_Matrix.shape[1]):
+            if not np.isnan(State_Matrix[i,j]): # if the cell is not a wall, record its index and add it to a list of valid states
+                idx = len(states)
+                states.append((i,j))
+                state_index[(i,j)] = idx
+
+    print("Base Scenario of Policy Iteration")
+    print(" ")
+    optimal_policy = Policy_Iteration(states, state_index, p=0.02, gamma=0.99, theta=0.01) # Base Scenario
+    trajectory, total_reward = simulate_episode(optimal_policy, start_state, state_index, p=0.02, Tmax=400)
+    print(" ")
+    print("Large Stochasticity Scenario of Policy Iteration")
+    print(" ")
+    Policy_Iteration(states, state_index, p=0.4, gamma=0.99, theta=0.01) # Large Stochasticity  Scenario
+    print(" ")
+    print("Small Discount Factor Scenario of Policy Iteration")
+    print(" ")
+    #Policy_Iteration(states, state_index, p=0.02, gamma=0.4, theta=0.01) # Small Discount Factor  Scenario
+    #print(" ")
+
 
 
 if __name__ == "__main__":
