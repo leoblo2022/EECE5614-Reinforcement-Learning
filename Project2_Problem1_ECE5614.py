@@ -63,6 +63,9 @@ def coloring_blocks(heatmap, oil_states, bump_states, start_state, end_state):
 
 # Reward Function
 def get_reward(s, next_s):
+    if s == goal_state:
+        return 0  # no more reward after reaches goal, it's done
+    
     # any move costs -1
     reward = -1  # action cost
     # if next state is itself because it hit a wall
@@ -95,6 +98,9 @@ def move_updates(state, action):
 # determine next state location based on transition probabilities
 def get_transitions(state, action, p):
     intended_next_state = move_updates(state, action)
+
+    if state == goal_state:
+        return [(1.0, goal_state)]  # goal-state is all absorbing, stay there once reached
     
     if action in ['U','D']:
         perpendicular_moves = ['L','R']
@@ -218,25 +224,84 @@ def main():
             policy[s_idx] = best_action
 
     # Extract Optimal Path
-    path = [start_state]
+    optimal_path = []
     current = start_state
 
     while current != goal_state:
-        idx = state_index[current] # find index of current state
-        action = policy[idx] # find mapping of state to action
-        current = move_updates(current, action) # find indices of next state
-        path.append(current)
+        action = policy[state_index[current]]
+        optimal_path.append((current, action))  # ← must store the tuple
+        current = move_updates(current, action)
 
-    # Results
-    print("Optimal Value Function (vector):")
-    print(V)
 
-    print("\nOptimal Policy (state -> action):")
-    for s in states:
-        print(s, "->", policy[state_index[s]])
+    # VISUALIZE RESULTS
+    # Create a fresh matrix for plotting the values
+    # plot the value function values on the heat map
+    plt.subplots(figsize=(13,7.5))
+    Value_Matrix = np.full(State_Matrix.shape, np.nan)
 
-    print("\nOptimal Path:")
-    print(path)
+    for (i, j) in states:
+        idx = state_index[(i, j)]
+        # Assign new 2D matrix with the value function value at the current state
+        Value_Matrix[i, j] = V[idx]
+
+    # Plot the new heatmap of the new value function values with the original state and coloring blocks
+    heatmap = sns.heatmap(Value_Matrix, fmt=".2f", annot= Value_Matrix, linewidths=0.25, linecolor='black',
+                        cbar= False, cmap= 'rocket_r', annot_kws={"size": 6})
+
+    heatmap.set_facecolor('black') # Color for the NA cells in the state matrix
+    coloring_blocks(heatmap, oil_states, bump_states, start_state, goal_state)
+    plt.title("Optimal Value Function")
+    plt.show()
+
+    # Create a fresh matrix for plotting the voptimal policy (for all states)
+    # plot the value function values on the heat map
+    plt.subplots(figsize=(13,7.5))
+    heatmap = sns.heatmap(State_Matrix, fmt=".2f", linewidths=0.25, linecolor='black',
+                        cbar= False, cmap= 'rocket_r')
+    heatmap.set_facecolor('black') # Color for the NA cells in the state matrix
+    coloring_blocks(heatmap, oil_states, bump_states, start_state, goal_state)
+
+    # go through each row and column
+    for (r, c) in states:
+        if (r, c) == goal_state:
+            continue  # no arrow at goal
+
+        action = policy[state_index[(r,c)]]
+
+        if action == 'R':
+            plt.arrow(c + 0.5, r + 0.5, 0.6, 0, width=0.04, color='black')
+        elif action == 'L':
+            plt.arrow(c + 0.5, r + 0.5, -0.6, 0, width=0.04, color='black')
+        elif action == 'U':
+            plt.arrow(c + 0.5, r + 0.5, 0, -0.6, width=0.04, color='black')
+        elif action == 'D':
+            plt.arrow(c + 0.5, r + 0.5, 0, 0.6, width=0.04, color='black')
+
+    plt.title("Optimal Policy")
+    plt.show()
+
+    # Finally, create a fresh matrix for plotting the optimal path
+    plt.subplots(figsize=(13,7.5))
+    heatmap = sns.heatmap(State_Matrix, fmt=".2f", linewidths=0.25, linecolor='black',
+                        cbar= False, cmap= 'rocket_r')
+    heatmap.set_facecolor('black') # Color for the NA cells in the state matrix
+    coloring_blocks(heatmap, oil_states, bump_states, start_state, goal_state)
+
+    for state_cr, direction in optimal_path:
+        r, c = state_cr
+
+        if direction == 'R':
+            plt.arrow(c + 0.5, r + 0.5, 0.8, 0, width=0.04, color='black')
+        elif direction == 'L':
+            plt.arrow(c + 0.5, r + 0.5, -0.8, 0, width=0.04, color='black')
+        elif direction == 'U':
+            plt.arrow(c + 0.5, r + 0.5, 0, -0.8, width=0.04, color='black')
+        elif direction == 'D':
+            plt.arrow(c + 0.5, r + 0.5, 0, 0.8, width=0.04, color='black')
+
+    plt.title("Optimal Path")
+    plt.show()
+
 
 if __name__ == "__main__":
     main()
