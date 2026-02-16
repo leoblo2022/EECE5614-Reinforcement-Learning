@@ -35,6 +35,8 @@ bump_states = [(1,11),(1,12),(2,1),(2,2),(2,3),(5,1),(5,9),(5,17),(6,17),(7,2),(
 start_state = (15,4)
 goal_state = (3,13)
 
+bump_penalty = -10
+
 actions = ['U', 'D', 'L', 'R']
 action_dict = {
     'U': (-1, 0), # move up a row
@@ -77,7 +79,7 @@ def get_reward(s, next_s):
         reward += -5
 
     if next_s in bump_states:
-        reward += -10
+        reward += bump_penalty
 
     if next_s == goal_state:
         reward += 200
@@ -125,8 +127,7 @@ def get_transitions(state, action, p):
 def plot_path_on_maze(path):
     # Finally, create a fresh matrix for plotting the optimal path
     plt.subplots(figsize=(13,7.5))
-    heatmap = sns.heatmap(State_Matrix, fmt=".2f", linewidths=0.25, linecolor='black',
-                        cbar= False, cmap= 'rocket_r')
+    heatmap = sns.heatmap(State_Matrix, fmt=".2f", linewidths=0.25, linecolor='black', cbar= False, cmap= 'rocket_r')
     heatmap.set_facecolor('black') # Color for the NA cells in the state matrix
     coloring_blocks(heatmap, oil_states, bump_states, start_state, goal_state)
 
@@ -158,8 +159,7 @@ def plot_path_on_maze(path):
         xs.append(c_new + 0.5)
         ys.append(r_new + 0.5)
 
-    print("length of xs", len(xs))
-    print("length of ys", len(ys))
+
     return xs, ys
 
 def Policy_Iteration(states, state_index, p, gamma, theta):
@@ -300,7 +300,7 @@ def Policy_Iteration(states, state_index, p, gamma, theta):
     plot_path_on_maze(optimal_path)
     plt.title("Optimal Path")
     plt.show()
-    print("Optimal Path length:", len(optimal_path), "steps")
+    print("Optimal Path length:", len(optimal_path), "steps\n")
 
     return policy
 
@@ -356,12 +356,12 @@ def simulate_episode(policy, start_state, state_index, p, Tmax):
         
         # update states
         state = next_state
-    
+
     xs, ys = plot_path_on_maze(trajectory)
-    plt.title("Sample Episode Path")
+    plt.title("Sample Episode Path\n")
     plt.show()
-    print("Sample Episode length:", len(trajectory), "steps")
-    print("Total reward:", total_reward)
+    print("Sample Episode length:", len(trajectory), "steps\n")
+    print("Total reward:", total_reward, "\n")
 
     return xs, ys
 
@@ -381,6 +381,7 @@ def plot_two_trajectories(x1, y1, x2, y2):
 
 
 def main():
+    global bump_penalty
     
     plt.subplots(figsize=(10,7.5))
     heatmap = sns.heatmap(State_Matrix, fmt=".2f", linewidths=0.25, linecolor='black',
@@ -401,36 +402,42 @@ def main():
                 idx = len(states)
                 states.append((i,j))
                 state_index[(i,j)] = idx
-
-    print("Base Scenario of Policy Iteration")
-    print(" ")
+    
+    # THREE SCENARIOS of POLICY ITERATION (vector based)
+    print("Base Scenario of Policy Iteration\n")
     optimal_policy = Policy_Iteration(states, state_index, p=0.02, gamma=0.99, theta=0.01) # Base Scenario
     x1, y1 = simulate_episode(optimal_policy, start_state, state_index, p=0.02, Tmax=400)
-    print(" ")
-    print("Large Stochasticity Scenario of Policy Iteration")
-    print(" ")
+    print("Large Stochasticity Scenario of Policy Iteration\n")
     optimal_policy = Policy_Iteration(states, state_index, p=0.4, gamma=0.99, theta=0.01) # Large Stochasticity  Scenario
     x1, y1 = simulate_episode(optimal_policy, start_state, state_index, p=0.4, Tmax=400)
-    print(" ")
-    print("Small Discount Factor Scenario of Policy Iteration")
-    print(" ")
+    print("Small Discount Factor Scenario of Policy Iteration\n")
     #Policy_Iteration(states, state_index, p=0.02, gamma=0.4, theta=0.01) # Small Discount Factor  Scenario
-    #print(" ")
+
 
     # EFFECT OF STOCHASTICITY
+    print("Testing the effect of stochasticity\n")
+    print("Testing with p=0.02\n")
     optimal_policy = Policy_Iteration(states, state_index, p=0.02, gamma=0.99, theta=0.01) # Base Scenario
     x1, y1 = simulate_episode(optimal_policy, start_state, state_index, p=0.02, Tmax=400)
     x2, y2 = simulate_episode(optimal_policy, start_state, state_index, p=0.02, Tmax=400)
     plot_two_trajectories(x1, y1, x2, y2)
+    print("Testing with p=0.2\n")
     optimal_policy = Policy_Iteration(states, state_index, p=0.2, gamma=0.99, theta=0.01) # high stochasticity
     x1, y1 = simulate_episode(optimal_policy, start_state, state_index, p=0.2, Tmax=400)
     x2, y2 = simulate_episode(optimal_policy, start_state, state_index, p=0.2, Tmax=400)
     plot_two_trajectories(x1, y1, x2, y2)
-    optimal_policy = Policy_Iteration(states, state_index, p=0.4, gamma=0.99, theta=0.01) # very high stochasticity
-    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, p=0.4, Tmax=400)
-    x2, y2 = simulate_episode(optimal_policy, start_state, state_index, p=0.4, Tmax=400)
-    plot_two_trajectories(x1, y1, x2, y2)
+    print("Testing with p=0.6\n")
+    #optimal_policy = Policy_Iteration(states, state_index, p=0.6, gamma=0.99, theta=0.01) # very high stochasticity
+    #x1, y1 = simulate_episode(optimal_policy, start_state, state_index, p=0.6, Tmax=400)
+    #x2, y2 = simulate_episode(optimal_policy, start_state, state_index, p=0.6, Tmax=400)
+    #plot_two_trajectories(x1, y1, x2, y2)
+    
 
+    # EFFECT OF BUMP PENALTY
+    print("Effect of bump penalty\n")
+    bump_penalty = -50
+    #print("Testing the effect of changing bump penalty to -50\n")
+    optimal_policy = Policy_Iteration(states, state_index, p=0.02, gamma=0.99, theta=0.01) # Base Scenario
 
 
 if __name__ == "__main__":
