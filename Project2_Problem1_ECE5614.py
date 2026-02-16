@@ -124,12 +124,13 @@ def get_transitions(state, action, p):
         (p/2, next_down)
         ]
 
-def plot_path_on_maze(path):
+def plot_optimal_path(path, toggle):
     # Finally, create a fresh matrix for plotting the optimal path
-    plt.subplots(figsize=(13,7.5))
-    heatmap = sns.heatmap(State_Matrix, fmt=".2f", linewidths=0.25, linecolor='black', cbar= False, cmap= 'rocket_r')
-    heatmap.set_facecolor('black') # Color for the NA cells in the state matrix
-    coloring_blocks(heatmap, oil_states, bump_states, start_state, goal_state)
+    if toggle == True:
+        plt.subplots(figsize=(13,7.5))
+        heatmap = sns.heatmap(State_Matrix, fmt=".2f", linewidths=0.25, linecolor='black', cbar= False, cmap= 'rocket_r')
+        heatmap.set_facecolor('black') # Color for the NA cells in the state matrix
+        coloring_blocks(heatmap, oil_states, bump_states, start_state, goal_state)
 
     xs = []
     ys = []
@@ -141,16 +142,20 @@ def plot_path_on_maze(path):
         r, c = state_cr
 
         if direction == 'R':
-            plt.arrow(c + 0.5, r + 0.5, 0.8, 0, width=0.04, color='black')
+            if toggle == True:
+                plt.arrow(c + 0.5, r + 0.5, 0.8, 0, width=0.04, color='black')
             r_new, c_new = r, c + 1
         elif direction == 'L':
-            plt.arrow(c + 0.5, r + 0.5, -0.8, 0, width=0.04, color='black')
+            if toggle == True:
+                plt.arrow(c + 0.5, r + 0.5, -0.8, 0, width=0.04, color='black')
             r_new, c_new = r, c - 1
         elif direction == 'U':
-            plt.arrow(c + 0.5, r + 0.5, 0, -0.8, width=0.04, color='black')
+            if toggle == True:
+                plt.arrow(c + 0.5, r + 0.5, 0, -0.8, width=0.04, color='black')
             r_new, c_new = r - 1, c
         elif direction == 'D':
-            plt.arrow(c + 0.5, r + 0.5, 0, 0.8, width=0.04, color='black')
+            if toggle == True:
+                plt.arrow(c + 0.5, r + 0.5, 0, 0.8, width=0.04, color='black')
             r_new, c_new = r + 1, c
         else:
             r_new, c_new = r, c
@@ -159,8 +164,57 @@ def plot_path_on_maze(path):
         xs.append(c_new + 0.5)
         ys.append(r_new + 0.5)
 
-
     return xs, ys
+
+# This helper function plots the values V(s) at each state on the maze 
+def plot_value_function(V, states, state_index):
+    # Create a fresh matrix for plotting the values
+    # plot the value function values on the heat map
+    plt.subplots(figsize=(13,7.5))
+    Value_Matrix = np.full(State_Matrix.shape, np.nan)
+
+    for (i, j) in states:
+        idx = state_index[(i, j)]
+        # Assign new 2D matrix with the value function value at the current state
+        Value_Matrix[i, j] = V[idx]
+
+    # Plot the new heatmap of the new value function values with the original state and coloring blocks
+    heatmap = sns.heatmap(Value_Matrix, fmt=".2f", annot= Value_Matrix, linewidths=0.25, linecolor='black',
+                        cbar= False, cmap= 'rocket_r', annot_kws={"size": 8})
+
+    heatmap.set_facecolor('black') # Color for the NA cells in the state matrix
+    coloring_blocks(heatmap, oil_states, bump_states, start_state, goal_state)
+    plt.title("Optimal Value Function")
+    plt.show()
+
+# Helper function that plots the optimal policy pi(s) on the maze
+def plot_optimal_policy(states, state_index, policy):
+    # plot the value function values on the heat map
+    plt.subplots(figsize=(13,7.5))
+    heatmap = sns.heatmap(State_Matrix, fmt=".2f", linewidths=0.25, linecolor='black',
+                        cbar= False, cmap= 'rocket_r')
+    heatmap.set_facecolor('black') # Color for the NA cells in the state matrix
+    coloring_blocks(heatmap, oil_states, bump_states, start_state, goal_state)
+
+    # go through each row and column
+    for (r, c) in states:
+        if (r, c) == goal_state:
+            continue  # no arrow at goal
+
+        action = policy[state_index[(r,c)]]
+
+        if action == 'R':
+            plt.arrow(c + 0.5, r + 0.5, 0.6, 0, width=0.04, color='black')
+        elif action == 'L':
+            plt.arrow(c + 0.5, r + 0.5, -0.6, 0, width=0.04, color='black')
+        elif action == 'U':
+            plt.arrow(c + 0.5, r + 0.5, 0, -0.6, width=0.04, color='black')
+        elif action == 'D':
+            plt.arrow(c + 0.5, r + 0.5, 0, 0.6, width=0.04, color='black')
+
+    plt.title("Optimal Policy")
+    plt.show()
+
 
 def Policy_Iteration(states, state_index, p, gamma, theta):
 
@@ -251,61 +305,12 @@ def Policy_Iteration(states, state_index, p, gamma, theta):
 
     # VISUALIZE RESULTS
     print("Iteration Count: ", iteration_count)
-    # Create a fresh matrix for plotting the values
-    # plot the value function values on the heat map
-    plt.subplots(figsize=(13,7.5))
-    Value_Matrix = np.full(State_Matrix.shape, np.nan)
+    print("Optimal Path length:", len(optimal_path), "steps")
 
-    for (i, j) in states:
-        idx = state_index[(i, j)]
-        # Assign new 2D matrix with the value function value at the current state
-        Value_Matrix[i, j] = V[idx]
-
-    # Plot the new heatmap of the new value function values with the original state and coloring blocks
-    heatmap = sns.heatmap(Value_Matrix, fmt=".2f", annot= Value_Matrix, linewidths=0.25, linecolor='black',
-                        cbar= False, cmap= 'rocket_r', annot_kws={"size": 8})
-
-    heatmap.set_facecolor('black') # Color for the NA cells in the state matrix
-    coloring_blocks(heatmap, oil_states, bump_states, start_state, goal_state)
-    plt.title("Optimal Value Function")
-    plt.show()
-
-    # Create a fresh matrix for plotting the voptimal policy (for all states)
-    # plot the value function values on the heat map
-    plt.subplots(figsize=(13,7.5))
-    heatmap = sns.heatmap(State_Matrix, fmt=".2f", linewidths=0.25, linecolor='black',
-                        cbar= False, cmap= 'rocket_r')
-    heatmap.set_facecolor('black') # Color for the NA cells in the state matrix
-    coloring_blocks(heatmap, oil_states, bump_states, start_state, goal_state)
-
-    # go through each row and column
-    for (r, c) in states:
-        if (r, c) == goal_state:
-            continue  # no arrow at goal
-
-        action = policy[state_index[(r,c)]]
-
-        if action == 'R':
-            plt.arrow(c + 0.5, r + 0.5, 0.6, 0, width=0.04, color='black')
-        elif action == 'L':
-            plt.arrow(c + 0.5, r + 0.5, -0.6, 0, width=0.04, color='black')
-        elif action == 'U':
-            plt.arrow(c + 0.5, r + 0.5, 0, -0.6, width=0.04, color='black')
-        elif action == 'D':
-            plt.arrow(c + 0.5, r + 0.5, 0, 0.6, width=0.04, color='black')
-
-    plt.title("Optimal Policy")
-    plt.show()
-
-    plot_path_on_maze(optimal_path)
-    plt.title("Optimal Path")
-    plt.show()
-    print("Optimal Path length:", len(optimal_path), "steps\n")
-
-    return policy
+    return policy, V, optimal_path
 
 # This function simulates the execution of the optimal policy using sampled state transitions
-def simulate_episode(policy, start_state, state_index, p, Tmax):
+def simulate_episode(policy, start_state, state_index, toggle, p, Tmax):
     
     state = start_state
     trajectory = []
@@ -357,10 +362,11 @@ def simulate_episode(policy, start_state, state_index, p, Tmax):
         # update states
         state = next_state
 
-    xs, ys = plot_path_on_maze(trajectory)
-    plt.title("Sample Episode Path\n")
-    plt.show()
-    print("Sample Episode length:", len(trajectory), "steps\n")
+    xs, ys = plot_optimal_path(trajectory, toggle)
+    if toggle == True:
+        plt.title("Sample Episode Path")
+        plt.show()
+    print("Sample Episode length:", len(trajectory), "steps")
     print("Total reward:", total_reward, "\n")
 
     return xs, ys
@@ -405,28 +411,38 @@ def main():
     
     # THREE SCENARIOS of POLICY ITERATION (vector based)
     print("Base Scenario of Policy Iteration\n")
-    optimal_policy = Policy_Iteration(states, state_index, p=0.02, gamma=0.99, theta=0.01) # Base Scenario
-    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, p=0.02, Tmax=400)
+    optimal_policy, optimal_values, optimal_path = Policy_Iteration(states, state_index, p=0.02, gamma=0.99, theta=0.01) # Base Scenario
+    plot_value_function(optimal_values, states, state_index) # plot optimal V(s) on the maze
+    plot_optimal_policy(states, state_index, optimal_policy) # plot optimal policy pi(s) on the maze
+    plot_optimal_path(optimal_path, toggle=True) #plots the optimal path on the maze 
+    plt.title("Optimal Path")
+    plt.show()
+    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, toggle=True, p=0.02, Tmax=400)
     print("Large Stochasticity Scenario of Policy Iteration\n")
-    optimal_policy = Policy_Iteration(states, state_index, p=0.4, gamma=0.99, theta=0.01) # Large Stochasticity  Scenario
-    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, p=0.4, Tmax=400)
+    optimal_policy, optimal_values, optimal_path = Policy_Iteration(states, state_index, p=0.4, gamma=0.99, theta=0.01) # Large Stochasticity  Scenario
+    plot_value_function(optimal_values, states, state_index) # plot optimal V(s) on the maze
+    plot_optimal_policy(states, state_index, optimal_policy) # plot optimal policy pi(s) on the maze
+    plot_optimal_path(optimal_path, toggle=True) #plots the optimal path on the maze 
+    plt.title("Optimal Path")
+    plt.show()
+    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, toggle=True, p=0.4, Tmax=400)
     print("Small Discount Factor Scenario of Policy Iteration\n")
-    #Policy_Iteration(states, state_index, p=0.02, gamma=0.4, theta=0.01) # Small Discount Factor  Scenario
+    #optimal_policy, optimal_values, optimal_path = Policy_Iteration(states, state_index, p=0.02, gamma=0.4, theta=0.01) # Small Discount Factor  Scenario
 
 
     # EFFECT OF STOCHASTICITY
     print("Testing the effect of stochasticity\n")
-    print("Testing with p=0.02\n")
-    optimal_policy = Policy_Iteration(states, state_index, p=0.02, gamma=0.99, theta=0.01) # Base Scenario
-    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, p=0.02, Tmax=400)
-    x2, y2 = simulate_episode(optimal_policy, start_state, state_index, p=0.02, Tmax=400)
+    print("Testing with p=0.02")
+    optimal_policy, optimal_values, optimal_path = Policy_Iteration(states, state_index, p=0.02, gamma=0.99, theta=0.01) # Base Scenario
+    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, toggle=False, p=0.02, Tmax=400)
+    x2, y2 = simulate_episode(optimal_policy, start_state, state_index, toggle=False, p=0.02, Tmax=400)
     plot_two_trajectories(x1, y1, x2, y2)
-    print("Testing with p=0.2\n")
-    optimal_policy = Policy_Iteration(states, state_index, p=0.2, gamma=0.99, theta=0.01) # high stochasticity
-    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, p=0.2, Tmax=400)
-    x2, y2 = simulate_episode(optimal_policy, start_state, state_index, p=0.2, Tmax=400)
+    print("Testing with p=0.2")
+    optimal_policy, optimal_values, optimal_path = Policy_Iteration(states, state_index, p=0.2, gamma=0.99, theta=0.01) # high stochasticity
+    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, toggle=False, p=0.2, Tmax=400)
+    x2, y2 = simulate_episode(optimal_policy, start_state, state_index, toggle=False, p=0.2, Tmax=400)
     plot_two_trajectories(x1, y1, x2, y2)
-    print("Testing with p=0.6\n")
+    print("Testing with p=0.6")
     #optimal_policy = Policy_Iteration(states, state_index, p=0.6, gamma=0.99, theta=0.01) # very high stochasticity
     #x1, y1 = simulate_episode(optimal_policy, start_state, state_index, p=0.6, Tmax=400)
     #x2, y2 = simulate_episode(optimal_policy, start_state, state_index, p=0.6, Tmax=400)
@@ -434,10 +450,14 @@ def main():
     
 
     # EFFECT OF BUMP PENALTY
-    print("Effect of bump penalty\n")
+    print("Effect of bump penalty")
     bump_penalty = -50
     #print("Testing the effect of changing bump penalty to -50\n")
-    optimal_policy = Policy_Iteration(states, state_index, p=0.02, gamma=0.99, theta=0.01) # Base Scenario
+    optimal_policy, optimal_values, optimal_path =  Policy_Iteration(states, state_index, p=0.02, gamma=0.99, theta=0.01) # Base Scenario
+    plot_optimal_policy(states, state_index, optimal_policy) # plot optimal policy pi(s) on the maze
+    plot_optimal_path(optimal_path, toggle=True) #plots the optimal path on the maze 
+    plt.title("Optimal Path")
+    plt.show()
 
 
 if __name__ == "__main__":
