@@ -122,6 +122,46 @@ def get_transitions(state, action, p):
         (p/2, next_down)
         ]
 
+def plot_path_on_maze(path):
+    # Finally, create a fresh matrix for plotting the optimal path
+    plt.subplots(figsize=(13,7.5))
+    heatmap = sns.heatmap(State_Matrix, fmt=".2f", linewidths=0.25, linecolor='black',
+                        cbar= False, cmap= 'rocket_r')
+    heatmap.set_facecolor('black') # Color for the NA cells in the state matrix
+    coloring_blocks(heatmap, oil_states, bump_states, start_state, goal_state)
+
+    xs = []
+    ys = []
+    current_state = path[0][0]
+    r, c = current_state
+    xs.append(c + 0.5)
+    ys.append(r + 0.5)
+    for state_cr, direction in path:
+        r, c = state_cr
+
+        if direction == 'R':
+            plt.arrow(c + 0.5, r + 0.5, 0.8, 0, width=0.04, color='black')
+            r_new, c_new = r, c + 1
+        elif direction == 'L':
+            plt.arrow(c + 0.5, r + 0.5, -0.8, 0, width=0.04, color='black')
+            r_new, c_new = r, c - 1
+        elif direction == 'U':
+            plt.arrow(c + 0.5, r + 0.5, 0, -0.8, width=0.04, color='black')
+            r_new, c_new = r - 1, c
+        elif direction == 'D':
+            plt.arrow(c + 0.5, r + 0.5, 0, 0.8, width=0.04, color='black')
+            r_new, c_new = r + 1, c
+        else:
+            r_new, c_new = r, c
+            continue # may have hit a wall 
+
+        xs.append(c_new + 0.5)
+        ys.append(r_new + 0.5)
+
+    print("length of xs", len(xs))
+    print("length of ys", len(ys))
+    return xs, ys
+
 def Policy_Iteration(states, state_index, p, gamma, theta):
 
     n_states = len(states)
@@ -257,27 +297,10 @@ def Policy_Iteration(states, state_index, p, gamma, theta):
     plt.title("Optimal Policy")
     plt.show()
 
-    # Finally, create a fresh matrix for plotting the optimal path
-    plt.subplots(figsize=(13,7.5))
-    heatmap = sns.heatmap(State_Matrix, fmt=".2f", linewidths=0.25, linecolor='black',
-                        cbar= False, cmap= 'rocket_r')
-    heatmap.set_facecolor('black') # Color for the NA cells in the state matrix
-    coloring_blocks(heatmap, oil_states, bump_states, start_state, goal_state)
-
-    for state_cr, direction in optimal_path:
-        r, c = state_cr
-
-        if direction == 'R':
-            plt.arrow(c + 0.5, r + 0.5, 0.8, 0, width=0.04, color='black')
-        elif direction == 'L':
-            plt.arrow(c + 0.5, r + 0.5, -0.8, 0, width=0.04, color='black')
-        elif direction == 'U':
-            plt.arrow(c + 0.5, r + 0.5, 0, -0.8, width=0.04, color='black')
-        elif direction == 'D':
-            plt.arrow(c + 0.5, r + 0.5, 0, 0.8, width=0.04, color='black')
-
+    plot_path_on_maze(optimal_path)
     plt.title("Optimal Path")
     plt.show()
+    print("Optimal Path length:", len(optimal_path), "steps")
 
     return policy
 
@@ -296,7 +319,8 @@ def simulate_episode(policy, start_state, state_index, p, Tmax):
             break
         
         # get the appropriate action for each state 
-        action = policy[state_index[state]]
+        s_idx = state_index[state]
+        action = policy[s_idx]
         
         transitions = get_transitions(state, action, p) # p(s'|a,s)
         
@@ -308,17 +332,52 @@ def simulate_episode(policy, start_state, state_index, p, Tmax):
         
         # based on probabilities, get next state 
         next_state = random.choices(next_states, weights=probs)[0]
-        
-        reward = get_reward(state, next_state)
+
+        state_row, state_column = state
+        next_state_row, next_state_column = next_state
+
+        # determine which action the episode actually took due to stochasticity 
+        if (next_state_row > state_row) and  (state_column == next_state_column):
+            actual_action = 'D'
+        elif (next_state_row < state_row) and  (state_column == next_state_column):
+            actual_action  = 'U'
+        elif (next_state_row == state_row) and  (state_column < next_state_column):
+            actual_action  = 'R'
+        elif (next_state_row == state_row) and  (state_column > next_state_column):
+            actual_action  = 'L'
+        else: 
+            actual_action  = None # hit wall
+
         # keep track of total reward
+        reward = get_reward(state, next_state)
         total_reward += reward
         
-        trajectory.append((state, action)) # keep track of trajectory of states
+        trajectory.append((state, actual_action)) # keep track of sample trajectory of states and directions
         
         # update states
         state = next_state
     
-    return trajectory, total_reward
+    xs, ys = plot_path_on_maze(trajectory)
+    plt.title("Sample Episode Path")
+    plt.show()
+    print("Sample Episode length:", len(trajectory), "steps")
+    print("Total reward:", total_reward)
+
+    return xs, ys
+
+
+def plot_two_trajectories(x1, y1, x2, y2):
+    plt.figure(figsize=(10,7.5))
+    heatmap = sns.heatmap(State_Matrix, linewidths=0.25, linecolor='black', cbar=False, cmap='rocket_r')
+    heatmap.set_facecolor('black')
+    coloring_blocks(heatmap, oil_states, bump_states, start_state, goal_state)
+
+    plt.plot(x1, y1, linestyle='-', marker='o', markersize=4, label='Episode 1')
+    plt.plot(x2, y2, linestyle='--', marker='s', markersize=4, label='Episode 2')
+
+    plt.legend()
+    plt.title("Two Independent Sample Trajectories")
+    plt.show()
 
 
 def main():
@@ -346,16 +405,31 @@ def main():
     print("Base Scenario of Policy Iteration")
     print(" ")
     optimal_policy = Policy_Iteration(states, state_index, p=0.02, gamma=0.99, theta=0.01) # Base Scenario
-    trajectory, total_reward = simulate_episode(optimal_policy, start_state, state_index, p=0.02, Tmax=400)
+    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, p=0.02, Tmax=400)
     print(" ")
     print("Large Stochasticity Scenario of Policy Iteration")
     print(" ")
-    Policy_Iteration(states, state_index, p=0.4, gamma=0.99, theta=0.01) # Large Stochasticity  Scenario
+    optimal_policy = Policy_Iteration(states, state_index, p=0.4, gamma=0.99, theta=0.01) # Large Stochasticity  Scenario
+    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, p=0.4, Tmax=400)
     print(" ")
     print("Small Discount Factor Scenario of Policy Iteration")
     print(" ")
     #Policy_Iteration(states, state_index, p=0.02, gamma=0.4, theta=0.01) # Small Discount Factor  Scenario
     #print(" ")
+
+    # EFFECT OF STOCHASTICITY
+    optimal_policy = Policy_Iteration(states, state_index, p=0.02, gamma=0.99, theta=0.01) # Base Scenario
+    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, p=0.02, Tmax=400)
+    x2, y2 = simulate_episode(optimal_policy, start_state, state_index, p=0.02, Tmax=400)
+    plot_two_trajectories(x1, y1, x2, y2)
+    optimal_policy = Policy_Iteration(states, state_index, p=0.2, gamma=0.99, theta=0.01) # high stochasticity
+    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, p=0.2, Tmax=400)
+    x2, y2 = simulate_episode(optimal_policy, start_state, state_index, p=0.2, Tmax=400)
+    plot_two_trajectories(x1, y1, x2, y2)
+    optimal_policy = Policy_Iteration(states, state_index, p=0.4, gamma=0.99, theta=0.01) # very high stochasticity
+    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, p=0.4, Tmax=400)
+    x2, y2 = simulate_episode(optimal_policy, start_state, state_index, p=0.4, Tmax=400)
+    plot_two_trajectories(x1, y1, x2, y2)
 
 
 
