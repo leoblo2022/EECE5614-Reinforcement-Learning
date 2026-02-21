@@ -225,10 +225,12 @@ def Policy_Iteration(states, state_index, p, gamma, theta):
     # POLICY ITERATION (Vector Form) 
     converged = False
     iteration_count = 0
-    T_max = 400
+    max_iterations = 400
 
-    while not converged:
+    while not converged and iteration_count < max_iterations:
         iteration_count +=1 #keep track of number of iterations
+        if iteration_count == max_iterations:
+            print("Policy iteration reached max iterations and did not converge in time.")
         
         # Step 1: POLICY EVALUATION (Approximate method, which is better for large state spaces)
         V = np.zeros(n_states) #initialize as vector Sx1
@@ -296,12 +298,18 @@ def Policy_Iteration(states, state_index, p, gamma, theta):
     # Extract Optimal Path
     optimal_path = []
     current = start_state
+    step_count = 0 # keep track of number of steps taken
+    T_max = 400
 
-    while current != goal_state:
+
+    while current != goal_state and step_count < T_max:
         action = policy[state_index[current]]
-        optimal_path.append((current, action))  # ← must store the tuple
+        optimal_path.append((current, action)) 
         current = move_updates(current, action)
+        step_count +=1
 
+    if current != goal_state:
+        print(f"Goal not reached within {T_max} steps. Episode terminated.")
 
     # VISUALIZE RESULTS
     print("Iteration Count: ", iteration_count)
@@ -386,6 +394,93 @@ def plot_two_trajectories(x1, y1, x2, y2):
     plt.show()
 
 
+def Value_Iteration(states, state_index, p, gamma, theta):
+
+    n_states = len(states)
+    T_max = 400
+    max_iterations = 400
+    # Initialize state values to zero
+    V = np.zeros(n_states)
+    iteration_count = 0
+
+    # VALUE ITERATION LOOP
+    while iteration_count < max_iterations:
+        iteration_count += 1
+        delta = 0 # set delta to 0
+        V_new = np.copy(V)
+
+        # loop for all states
+        for s in states:
+            s_idx = state_index[s] # find the index of each state 
+            Q_values = []
+            # Bellman Equation: V(s) = max_a sum of p(s'|s,a)[R(s,a,s')+gamma*V(s')]
+            for action in actions: # loop through all actions 
+                q = 0
+                transitions = get_transitions(s, action, p) # get p(s'|s,a)
+
+                for prob, next_s in transitions:
+                    next_idx = state_index[next_s] # get index of s'
+                    r = get_reward(s, next_s) # get reward R(s,a,s')
+                    q += prob * (r + gamma * V[next_idx]) # Q(s,a) = sum p(s'|s,a)[R(s,a,s')+gamma*V(s')] 
+
+                Q_values.append(q)
+
+            V_new[s_idx] = max(Q_values) # Let V(s) = max Q(s,a)
+            best_q = max(Q_values)
+
+            # update delta max(delta, ||v-V(s)||)
+            delta = max(delta, abs(V[s_idx] - best_q))  
+
+        V = V_new #update all values 
+
+        # check convergence criteria: is delta < theta
+        if delta < theta:
+            break
+
+    print("Value Iteration completed in", iteration_count, "iterations")
+
+    # FIND PI*(s): Once loop is over and optimal values V*(s) is found, find pi*(s)
+    policy = np.empty(n_states, dtype=object)
+
+    # Bellman Optimality: pi*(s) = argmax sum_a of p(s'|s,a)[R(s,a,s')+gamma*V(s')]
+    for s in states: # loop over all states
+        s_idx = state_index[s]
+        Q_values = []
+
+        for action in actions: # loop through all actions
+            q = 0
+            transitions = get_transitions(s, action, p) # get p(s'|s,a)
+
+            for prob, next_s in transitions:
+                next_idx = state_index[next_s]
+                r = get_reward(s, next_s)
+                q += prob * (r + gamma * V[next_idx]) # Q(s,a) = sum p(s'|s,a)[R(s,a,s')+gamma*V(s')] 
+
+            Q_values.append(q)
+
+        policy[s_idx] = actions[np.argmax(Q_values)] # find the best action using argmax
+
+    # Extract optimal path
+    optimal_path = []
+    current = start_state
+    step_count = 0
+    T_max = 400
+
+    while current != goal_state and step_count < T_max:
+        action = policy[state_index[current]]
+        optimal_path.append((current, action))
+        current = move_updates(current, action)
+        step_count += 1
+
+    if current != goal_state:
+        print(f"Goal not reached within {T_max} steps.")
+
+    # Results 
+    print("Optimal path length:", len(optimal_path), "steps")
+
+    return policy, V, optimal_path
+
+
 def main():
     global bump_penalty
     
@@ -426,8 +521,42 @@ def main():
     plt.title("Optimal Path")
     plt.show()
     x1, y1 = simulate_episode(optimal_policy, start_state, state_index, toggle=True, p=0.4, Tmax=400)
+
     print("Small Discount Factor Scenario of Policy Iteration\n")
-    #optimal_policy, optimal_values, optimal_path = Policy_Iteration(states, state_index, p=0.02, gamma=0.4, theta=0.01) # Small Discount Factor  Scenario
+    optimal_policy, optimal_values, optimal_path = Policy_Iteration(states, state_index, p=0.02, gamma=0.4, theta=0.01) # Small Discount Factor  Scenario
+    plot_value_function(optimal_values, states, state_index) # plot optimal V(s) on the maze
+    plot_optimal_policy(states, state_index, optimal_policy) # plot optimal policy pi(s) on the maze
+    plot_optimal_path(optimal_path, toggle=True) #plots the optimal path on the maze 
+    plt.title("Optimal Path")
+    plt.show()
+    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, toggle=True, p=0.02, Tmax=400)
+ 
+
+    # THREE SCENARIOS of Value ITERATION (vector based)
+    print("Base Scenario of Value Iteration\n")
+    optimal_policy, optimal_values, optimal_path = Value_Iteration(states, state_index, p=0.02, gamma=0.99, theta=0.01)
+    plot_value_function(optimal_values, states, state_index) # plot optimal V(s) on the maze
+    plot_optimal_policy(states, state_index, optimal_policy) # plot optimal policy pi(s) on the maze
+    plot_optimal_path(optimal_path, toggle=True) #plots the optimal path on the maze 
+    plt.title("Optimal Path")
+    plt.show()
+    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, toggle=True, p=0.02, Tmax=400)
+    print("Large Stochasticity of Value Iteration\n")
+    optimal_policy, optimal_values, optimal_path = Value_Iteration(states, state_index, p=0.4, gamma=0.99, theta=0.01)
+    plot_value_function(optimal_values, states, state_index) # plot optimal V(s) on the maze
+    plot_optimal_policy(states, state_index, optimal_policy) # plot optimal policy pi(s) on the maze
+    plot_optimal_path(optimal_path, toggle=True) #plots the optimal path on the maze 
+    plt.title("Optimal Path")
+    plt.show()
+    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, toggle=True, p=0.4, Tmax=400)
+    print("Small Discount Factor of Value Iteration\n")
+    optimal_policy, optimal_values, optimal_path = Value_Iteration(states, state_index, p=0.02, gamma=0.4, theta=0.01)
+    plot_value_function(optimal_values, states, state_index) # plot optimal V(s) on the maze
+    plot_optimal_policy(states, state_index, optimal_policy) # plot optimal policy pi(s) on the maze
+    plot_optimal_path(optimal_path, toggle=True) #plots the optimal path on the maze 
+    plt.title("Optimal Path")
+    plt.show()
+    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, toggle=True, p=0.02, Tmax=400)
 
 
     # EFFECT OF STOCHASTICITY
@@ -443,10 +572,10 @@ def main():
     x2, y2 = simulate_episode(optimal_policy, start_state, state_index, toggle=False, p=0.2, Tmax=400)
     plot_two_trajectories(x1, y1, x2, y2)
     print("Testing with p=0.6")
-    #optimal_policy = Policy_Iteration(states, state_index, p=0.6, gamma=0.99, theta=0.01) # very high stochasticity
-    #x1, y1 = simulate_episode(optimal_policy, start_state, state_index, p=0.6, Tmax=400)
-    #x2, y2 = simulate_episode(optimal_policy, start_state, state_index, p=0.6, Tmax=400)
-    #plot_two_trajectories(x1, y1, x2, y2)
+    optimal_policy, optimal_values, optimal_path = Policy_Iteration(states, state_index, p=0.6, gamma=0.99, theta=0.01) # very high stochasticity
+    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, toggle=False, p=0.6, Tmax=400)
+    x2, y2 = simulate_episode(optimal_policy, start_state, state_index, toggle=False, p=0.6, Tmax=400)
+    plot_two_trajectories(x1, y1, x2, y2)
     
 
     # EFFECT OF BUMP PENALTY
