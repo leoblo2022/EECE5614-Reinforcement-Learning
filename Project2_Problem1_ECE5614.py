@@ -29,7 +29,7 @@ State_Matrix = \
             [np.nan, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, np.nan],
             [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan]])
 
-  # define location of all states
+# define location of all states
 oil_states = [(2,8),(2,16),(4,2),(5,6),(10,18),(15,10),(16,10),(17,14),(17,17),(18,7)]
 bump_states = [(1,11),(1,12),(2,1),(2,2),(2,3),(5,1),(5,9),(5,17),(6,17),(7,2),(7,10),(7,11),(7,17),(8,17),(12,11),(12,12),(14,1),(14,2),(15,17),(15,18),(16,7)]
 start_state = (15,4)
@@ -37,6 +37,7 @@ goal_state = (3,13)
 
 bump_penalty = -10
 
+# define action space
 actions = ['U', 'D', 'L', 'R']
 action_dict = {
     'U': (-1, 0), # move up a row
@@ -98,7 +99,7 @@ def move_updates(state, action):
     else:
         return (i_new, j_new) #return the new indices of the next state
     
-# determine next state location based on transition probabilities
+# This function determines next state location based on transition probabilities
 def get_transitions(state, action, p):
     intended_next_state = move_updates(state, action)
 
@@ -124,6 +125,7 @@ def get_transitions(state, action, p):
         (p/2, next_down)
         ]
 
+# This function plots the optimal path from start state to goal state
 def plot_optimal_path(path, toggle):
     # Finally, create a fresh matrix for plotting the optimal path
     if toggle == True:
@@ -215,7 +217,7 @@ def plot_optimal_policy(states, state_index, policy):
     plt.title("Optimal Policy")
     plt.show()
 
-
+# This function implements policy iteration and returns the optimal policy pi*(s), optimal path, and values V*(s)
 def Policy_Iteration(states, state_index, p, gamma, theta):
 
     n_states = len(states)
@@ -230,7 +232,7 @@ def Policy_Iteration(states, state_index, p, gamma, theta):
     while not converged and iteration_count < max_iterations:
         iteration_count +=1 #keep track of number of iterations
         if iteration_count == max_iterations:
-            print("Policy iteration reached max iterations and did not converge in time.")
+            print("Policy iteration reached max of 400 iterations and did not converge in time.")
         
         # Step 1: POLICY EVALUATION (Approximate method, which is better for large state spaces)
         V = np.zeros(n_states) #initialize as vector Sx1
@@ -310,19 +312,19 @@ def Policy_Iteration(states, state_index, p, gamma, theta):
 
     if current != goal_state:
         print(f"Goal not reached within {T_max} steps. Episode terminated.")
-
-    # VISUALIZE RESULTS
-    print("Iteration Count: ", iteration_count)
-    print("Optimal Path length:", len(optimal_path), "steps")
+    else:
+        print("Optimal Path length:", len(optimal_path), "steps")
+        print("Iteration Count: ", iteration_count)
 
     return policy, V, optimal_path
 
 # This function simulates the execution of the optimal policy using sampled state transitions
-def simulate_episode(policy, start_state, state_index, toggle, p, Tmax):
+def simulate_episode(policy, state_index, toggle, p, Tmax):
     
     state = start_state
     trajectory = []
     total_reward = 0
+    cumulative_rewards = []
     
     # max limit is 400 steps
     for t in range(Tmax):
@@ -364,6 +366,8 @@ def simulate_episode(policy, start_state, state_index, toggle, p, Tmax):
         # keep track of total reward
         reward = get_reward(state, next_state)
         total_reward += reward
+
+        cumulative_rewards.append(total_reward) # keep track of reward at each time step
         
         trajectory.append((state, actual_action)) # keep track of sample trajectory of states and directions
         
@@ -377,9 +381,9 @@ def simulate_episode(policy, start_state, state_index, toggle, p, Tmax):
     print("Sample Episode length:", len(trajectory), "steps")
     print("Total reward:", total_reward, "\n")
 
-    return xs, ys
+    return xs, ys, cumulative_rewards
 
-
+# This helper function plots two sample trajectoruies on the same maze
 def plot_two_trajectories(x1, y1, x2, y2):
     plt.figure(figsize=(10,7.5))
     heatmap = sns.heatmap(State_Matrix, linewidths=0.25, linecolor='black', cbar=False, cmap='rocket_r')
@@ -393,9 +397,9 @@ def plot_two_trajectories(x1, y1, x2, y2):
     plt.title("Two Independent Sample Trajectories")
     plt.show()
 
-
+# This function implements value iteration and returns the optimal policy pi*(s), optimal path, and values V*(s)
 def Value_Iteration(states, state_index, p, gamma, theta):
-
+    
     n_states = len(states)
     T_max = 400
     max_iterations = 400
@@ -474,13 +478,55 @@ def Value_Iteration(states, state_index, p, gamma, theta):
 
     if current != goal_state:
         print(f"Goal not reached within {T_max} steps.")
-
-    # Results 
-    print("Optimal path length:", len(optimal_path), "steps")
+    else:
+        # Results 
+        print("Optimal path length:", len(optimal_path), "steps")
 
     return policy, V, optimal_path
 
+# This function calculates and plots the average cumulative reward across 10 simulations 
+def average_cumulative_reward(policy, state_index, p):
+    
+    Tmax = 400
+    trajectories = []
+    taus = []
+    num_episodes = 10
+    
+    # Run 10 simulations
+    for i in range(num_episodes):
+        x, y, cum_rewards = simulate_episode(policy, state_index, toggle=False, p=p, Tmax=400)
+        tau = len(cum_rewards) # termination time (number of steps until reached goal)
+        trajectories.append(cum_rewards) #keep track of all cumulative reward trajectories
+        taus.append(tau) # keep track of all termination times
+    
+    # Define T_p
+    T_p = max(taus)
+    
+    # Extend trajectories to length T_p
+    cum_reward_full_length = []
+    padding = []
+    
+    for cum_rewards in trajectories:
+        if len(cum_rewards) < T_p:
+            last_value = cum_rewards[-1] # accesses last element in array
+            padding = [last_value] * (T_p - len(cum_rewards)) # find out length difference between Tp and cum_reward array
+            cum_reward_full_length.append(cum_rewards + padding) # keep reward constant until it reaches Tp
+        else:
+            cum_reward_full_length.append(cum_rewards) # if length is same as Tp, keep the same 
+    
+    cum_reward_full_length = np.array(cum_reward_full_length)
+    
+    # Calculate Average cumulative reward curve
+    G_bar = np.mean(cum_reward_full_length, axis=0)
 
+    plt.plot(range(T_p), G_bar, label=f"p = {p}")
+    plt.xlabel("Time step t")
+    plt.ylabel("Average cumulative reward")
+    plt.legend()
+    plt.title("Average Cumulative Reward Curves")
+
+######################################################################################################################################
+# **** MAIN FUNCTION ****
 def main():
     global bump_penalty
     
@@ -503,8 +549,8 @@ def main():
                 idx = len(states)
                 states.append((i,j))
                 state_index[(i,j)] = idx
-    
-    # THREE SCENARIOS of POLICY ITERATION (vector based)
+
+    # **** THREE SCENARIOS of POLICY ITERATION (vector based) ****
     print("Base Scenario of Policy Iteration\n")
     optimal_policy, optimal_values, optimal_path = Policy_Iteration(states, state_index, p=0.02, gamma=0.99, theta=0.01) # Base Scenario
     plot_value_function(optimal_values, states, state_index) # plot optimal V(s) on the maze
@@ -512,7 +558,7 @@ def main():
     plot_optimal_path(optimal_path, toggle=True) #plots the optimal path on the maze 
     plt.title("Optimal Path")
     plt.show()
-    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, toggle=True, p=0.02, Tmax=400)
+    x1, y1, cumulative_rewards = simulate_episode(optimal_policy, state_index, toggle=True, p=0.02, Tmax=400)
     print("Large Stochasticity Scenario of Policy Iteration\n")
     optimal_policy, optimal_values, optimal_path = Policy_Iteration(states, state_index, p=0.4, gamma=0.99, theta=0.01) # Large Stochasticity  Scenario
     plot_value_function(optimal_values, states, state_index) # plot optimal V(s) on the maze
@@ -520,7 +566,7 @@ def main():
     plot_optimal_path(optimal_path, toggle=True) #plots the optimal path on the maze 
     plt.title("Optimal Path")
     plt.show()
-    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, toggle=True, p=0.4, Tmax=400)
+    x1, y1, cumulative_rewards = simulate_episode(optimal_policy, state_index, toggle=True, p=0.4, Tmax=400)
 
     print("Small Discount Factor Scenario of Policy Iteration\n")
     optimal_policy, optimal_values, optimal_path = Policy_Iteration(states, state_index, p=0.02, gamma=0.4, theta=0.01) # Small Discount Factor  Scenario
@@ -529,10 +575,10 @@ def main():
     plot_optimal_path(optimal_path, toggle=True) #plots the optimal path on the maze 
     plt.title("Optimal Path")
     plt.show()
-    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, toggle=True, p=0.02, Tmax=400)
+    x1, y1, cumulative_rewards = simulate_episode(optimal_policy, state_index, toggle=True, p=0.02, Tmax=400)
  
 
-    # THREE SCENARIOS of Value ITERATION (vector based)
+    # **** THREE SCENARIOS of VALUE ITERATION (vector based) ****
     print("Base Scenario of Value Iteration\n")
     optimal_policy, optimal_values, optimal_path = Value_Iteration(states, state_index, p=0.02, gamma=0.99, theta=0.01)
     plot_value_function(optimal_values, states, state_index) # plot optimal V(s) on the maze
@@ -540,7 +586,7 @@ def main():
     plot_optimal_path(optimal_path, toggle=True) #plots the optimal path on the maze 
     plt.title("Optimal Path")
     plt.show()
-    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, toggle=True, p=0.02, Tmax=400)
+    x1, y1, cumulative_rewards = simulate_episode(optimal_policy, state_index, toggle=True, p=0.02, Tmax=400)
     print("Large Stochasticity of Value Iteration\n")
     optimal_policy, optimal_values, optimal_path = Value_Iteration(states, state_index, p=0.4, gamma=0.99, theta=0.01)
     plot_value_function(optimal_values, states, state_index) # plot optimal V(s) on the maze
@@ -548,7 +594,7 @@ def main():
     plot_optimal_path(optimal_path, toggle=True) #plots the optimal path on the maze 
     plt.title("Optimal Path")
     plt.show()
-    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, toggle=True, p=0.4, Tmax=400)
+    x1, y1, cumulative_rewards = simulate_episode(optimal_policy, state_index, toggle=True, p=0.4, Tmax=400)
     print("Small Discount Factor of Value Iteration\n")
     optimal_policy, optimal_values, optimal_path = Value_Iteration(states, state_index, p=0.02, gamma=0.4, theta=0.01)
     plot_value_function(optimal_values, states, state_index) # plot optimal V(s) on the maze
@@ -556,29 +602,36 @@ def main():
     plot_optimal_path(optimal_path, toggle=True) #plots the optimal path on the maze 
     plt.title("Optimal Path")
     plt.show()
-    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, toggle=True, p=0.02, Tmax=400)
-
-
-    # EFFECT OF STOCHASTICITY
-    print("Testing the effect of stochasticity\n")
-    print("Testing with p=0.02")
-    optimal_policy, optimal_values, optimal_path = Policy_Iteration(states, state_index, p=0.02, gamma=0.99, theta=0.01) # Base Scenario
-    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, toggle=False, p=0.02, Tmax=400)
-    x2, y2 = simulate_episode(optimal_policy, start_state, state_index, toggle=False, p=0.02, Tmax=400)
-    plot_two_trajectories(x1, y1, x2, y2)
-    print("Testing with p=0.2")
-    optimal_policy, optimal_values, optimal_path = Policy_Iteration(states, state_index, p=0.2, gamma=0.99, theta=0.01) # high stochasticity
-    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, toggle=False, p=0.2, Tmax=400)
-    x2, y2 = simulate_episode(optimal_policy, start_state, state_index, toggle=False, p=0.2, Tmax=400)
-    plot_two_trajectories(x1, y1, x2, y2)
-    print("Testing with p=0.6")
-    optimal_policy, optimal_values, optimal_path = Policy_Iteration(states, state_index, p=0.6, gamma=0.99, theta=0.01) # very high stochasticity
-    x1, y1 = simulate_episode(optimal_policy, start_state, state_index, toggle=False, p=0.6, Tmax=400)
-    x2, y2 = simulate_episode(optimal_policy, start_state, state_index, toggle=False, p=0.6, Tmax=400)
-    plot_two_trajectories(x1, y1, x2, y2)
+    x1, y1, cumulative_rewards = simulate_episode(optimal_policy, state_index, toggle=True, p=0.02, Tmax=400)
     
 
-    # EFFECT OF BUMP PENALTY
+    # **** EFFECT OF STOCHASTICITY ****
+    #Part 1: Path Overlay
+    print("Testing the effect of stochasticity\n")
+    print("Testing with p=0.02")
+    optimal_policy_v1, optimal_values, optimal_path = Policy_Iteration(states, state_index, p=0.02, gamma=0.99, theta=0.01) # Base Scenario
+    x1, y1, cumulative_rewards = simulate_episode(optimal_policy_v1, state_index, toggle=False, p=0.02, Tmax=400)
+    x2, y2, cumulative_rewards = simulate_episode(optimal_policy_v1, state_index, toggle=False, p=0.02, Tmax=400)
+    plot_two_trajectories(x1, y1, x2, y2)
+    print("Testing with p=0.2")
+    optimal_policy_v2, optimal_values, optimal_path = Policy_Iteration(states, state_index, p=0.2, gamma=0.99, theta=0.01) # high stochasticity
+    x1, y1, cumulative_rewards = simulate_episode(optimal_policy_v2, state_index, toggle=False, p=0.2, Tmax=400)
+    x2, y2, cumulative_rewards = simulate_episode(optimal_policy_v2, state_index, toggle=False, p=0.2, Tmax=400)
+    plot_two_trajectories(x1, y1, x2, y2)
+    print("Testing with p=0.6")
+    optimal_policy_v3, optimal_values, optimal_path = Policy_Iteration(states, state_index, p=0.6, gamma=0.99, theta=0.01) # very high stochasticity
+    x1, y1, cumulative_rewards = simulate_episode(optimal_policy_v3, state_index, toggle=False, p=0.6, Tmax=400)
+    x2, y2, cumulative_rewards = simulate_episode(optimal_policy_v3, state_index, toggle=False, p=0.6, Tmax=400)
+    plot_two_trajectories(x1, y1, x2, y2)
+
+    # Part 2: Average cumulative reward curves
+    print("Comparing average cumulative reward\n")
+    average_cumulative_reward(optimal_policy_v1, state_index, p=0.02)
+    average_cumulative_reward(optimal_policy_v2, state_index, p=0.2)
+    average_cumulative_reward(optimal_policy_v3, state_index, p=0.6)
+    plt.show()
+
+    # **** EFFECT OF BUMP PENALTY ****
     print("Effect of bump penalty")
     bump_penalty = -50
     #print("Testing the effect of changing bump penalty to -50\n")
