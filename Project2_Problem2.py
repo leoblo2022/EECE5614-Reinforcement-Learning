@@ -136,13 +136,14 @@ def value_iteration(M, r, gamma, theta):
             for a in range(num_actions):
                 # Value iteration backup: Vk+1 = max(R(s,a) + gamma*M(a)Vk)
                 Q_values[a] = r[a][s] + gamma * np.dot(M[a][s], V)
-                k = k+1 # keep track of iterations
 
             V_new[s] = np.max(Q_values) # find the max, this is Vk+1
 
         delta = np.max(np.abs(V_new - V)) # max|Vk+1-Vk|
         V = V_new # update Vk to Vk+1
 
+        k = k+1 # keep track of iterations
+        
         # check for convergence/stability
         if delta < theta:
             break
@@ -152,7 +153,7 @@ def value_iteration(M, r, gamma, theta):
 
     policy = extract_policy(V_star, M, r, gamma )
     
-    return policy, V_star
+    return policy, V_star, k
 
 
 def simulate_policy(policy, M, states, n_episodes=75, T=150):
@@ -189,6 +190,75 @@ def simulate_policy(policy, M, states, n_episodes=75, T=150):
     
     return AvgA
 
+# Policy Iteration function, adapted from Sutton pg. 80
+def policy_iteration(M, r, gamma, theta):
+
+    num_states = len(r[0]) # should be 16
+    num_actions = len(M)  # should be 5
+
+    policy = np.zeros(num_states, dtype=int) # Initial policy with action a1 for all states
+
+    V = np.zeros(num_states) # initialize values to 0
+    k=0
+
+    while True:
+
+        k=k+1 # keep track of iterations
+
+        # POLICY EVALUATION STEP (Exact)
+        P_pi = np.zeros((num_states, num_states)) #16x16
+        R_pi = np.zeros(num_states) #16x1
+
+        # loop through each state
+        for s in range(num_states):
+
+            a = policy[s]
+
+            # generate P(pi) and R_s
+            P_pi[s, :] = M[a][s] # transition probabilities
+            R_pi[s] = r[a][s]  # reward
+
+        # 16x16 Identity matrix 
+        I = np.eye(num_states)
+
+        # Solve V_pi = (I-gamma*P(pi)^-1*R(s,a)
+        # A = I - gamma * P_pi
+        # b = R_pi
+        V = np.linalg.solve(I - gamma * P_pi, R_pi) # solves Ax = b
+
+        # POLICY IMPROVEMENT STEP
+        policy_stable = True
+
+        # loop through each state
+        for s in range(num_states):
+
+            old_action = policy[s]
+
+            Q_values = np.zeros(num_actions)
+
+            # loop through all actions
+            for a in range(num_actions):
+
+                # pi(s) = argmax of R(s,a) + gamma*M(a,s)V_pi
+                Q_values[a] = r[a][s] + gamma * np.dot(M[a][s], V)
+
+            # use argmax to find optimal action
+            best_action = np.argmax(Q_values)
+
+            policy[s] = best_action # building optimal policy
+
+            if old_action != best_action:
+                policy_stable = False
+
+        # stop if policy doesn't change
+        if policy_stable:
+            break
+
+    V_star = V #optimal values
+    pi_star = policy #optima policy
+
+    return pi_star, V_star, k
+
 
 def main():
 
@@ -196,17 +266,15 @@ def main():
     M = build_transition_matrices(states, actions, C, p=0.045)
     r = reward_function(states, actions, M)
 
-    optimal_policy, V_star = value_iteration(M, r, gamma, theta)
+    optimal_policy, V_star, iterations  = value_iteration(M, r, gamma, theta)
   
     print("\nOptimal Policy for p=0.045:")
     for i in range(16):
         state_str = np.binary_repr(i, width=4)
         print(f"State {state_str} -> Action a{optimal_policy[i] + 1}")
 
-    print("\nOptimal Value Function for p=0.045")
-    print(V_star)
-
     AvgA = simulate_policy(optimal_policy, M, states)
+    print("Number of Iterations for value iteration with p=0.045:", iterations)
     print("Average Activation Rate over 75 episodes for optimal policy with p=0.045:", AvgA)
 
     # Part a: No control policy
@@ -217,12 +285,13 @@ def main():
     # Part b: for p=0.18
     M = build_transition_matrices(states, actions, C, p=0.18)
     r = reward_function(states, actions, M)
-    optimal_policy, V_star = value_iteration(M, r, gamma, theta)
+    optimal_policy, V_star, iterations  = value_iteration(M, r, gamma, theta)
     print("\nOptimal Policy for p=0.18:")
     for i in range(16):
         state_str = np.binary_repr(i, width=4)
         print(f"State {state_str} -> Action a{optimal_policy[i] + 1}")
     AvgA = simulate_policy(optimal_policy, M, states)
+    print("Number of Iterations for value iteration with p=0.18:", iterations)
     print("Average Activation Rate over 75 episodes for optimal policy with p=0.18:", AvgA)
     AvgA_nocontrol = simulate_policy(No_control_policy, M, states)
     print("Average Activation Rate over 75 episodes for no control policy with p=0.18:", AvgA_nocontrol)
@@ -230,15 +299,29 @@ def main():
     # Part b: for p=0.55
     M = build_transition_matrices(states, actions, C, p=0.55)
     r = reward_function(states, actions, M)
-    optimal_policy, V_star = value_iteration(M, r, gamma, theta)
+    optimal_policy, V_star, iterations  = value_iteration(M, r, gamma, theta)
     print("\nOptimal Policy for p=0.55:")
     for i in range(16):
         state_str = np.binary_repr(i, width=4)
         print(f"State {state_str} -> Action a{optimal_policy[i] + 1}")
     AvgA = simulate_policy(optimal_policy, M, states)
+    print("Number of Iterations for value iteration with p=0.55:", iterations)
     print("Average Activation Rate over 75 episodes for optimal policy with p=0.55:", AvgA)
     AvgA_nocontrol = simulate_policy(No_control_policy, M, states)
     print("Average Activation Rate over 75 episodes for no control policy with p=0.55:", AvgA_nocontrol)
+
+    # part c, repeat part a with matrix-form policy iteration
+    M = build_transition_matrices(states, actions, C, p=0.045)
+    r = reward_function(states, actions, M)
+    pi_star, V_star, iterations  = policy_iteration(M, r, gamma, theta)
+    print("\nOptimal Policy for p=0.045, policy iteration:")
+    for i in range(16):
+        state_str = np.binary_repr(i, width=4)
+        print(f"State {state_str} -> Action a{pi_star[i] + 1}")
+
+    AvgA = simulate_policy(pi_star, M, states)
+    print("Number of Iterations for policy iteration with p=0.045:", iterations)
+    print("Policy Iteration: Average Activation Rate over 75 episodes for optimal policy with p=0.045:", AvgA)
 
 
 if __name__ == "__main__":
