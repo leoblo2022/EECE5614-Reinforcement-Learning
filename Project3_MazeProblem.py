@@ -127,6 +127,7 @@ def get_transitions(state, action, p):
         (p/2, next_down)
         ]
 
+
 # This function plots the optimal path from start state to goal state
 def plot_optimal_path(path, toggle):
     # Finally, create a fresh matrix for plotting the optimal path
@@ -170,27 +171,6 @@ def plot_optimal_path(path, toggle):
 
     return xs, ys
 
-# This helper function plots the values V(s) at each state on the maze 
-def plot_value_function(V, states, state_index):
-    # Create a fresh matrix for plotting the values
-    # plot the value function values on the heat map
-    plt.subplots(figsize=(13,7.5))
-    Value_Matrix = np.full(State_Matrix.shape, np.nan)
-
-    for (i, j) in states:
-        idx = state_index[(i, j)]
-        # Assign new 2D matrix with the value function value at the current state
-        Value_Matrix[i, j] = V[idx]
-
-    # Plot the new heatmap of the new value function values with the original state and coloring blocks
-    heatmap = sns.heatmap(Value_Matrix, fmt=".2f", annot= Value_Matrix, linewidths=0.25, linecolor='black',
-                        cbar= False, cmap= 'rocket_r', annot_kws={"size": 8})
-
-    heatmap.set_facecolor('black') # Color for the NA cells in the state matrix
-    coloring_blocks(heatmap, oil_states, bump_states, start_state, goal_state)
-    plt.title("Optimal Value Function")
-    plt.show()
-
 # Helper function that plots the optimal policy pi(s) on the maze
 def plot_optimal_policy(states, state_index, policy):
     # plot the value function values on the heat map
@@ -219,112 +199,7 @@ def plot_optimal_policy(states, state_index, policy):
     plt.title("Optimal Policy")
     plt.show()
 
-# This function simulates the execution of the optimal policy using sampled state transitions
-def simulate_episode(policy, state_index, toggle, p, Tmax):
-    
-    state = start_state
-    trajectory = []
-    total_reward = 0
-    cumulative_rewards = []
-    
-    # max limit is 400 steps
-    for t in range(Tmax):
-        
-        # terminate if goal state is reached 
-        if state == goal_state:
-            break
-        
-        # get the appropriate action for each state 
-        s_idx = state_index[state]
-        action = policy[s_idx]
-        
-        transitions = get_transitions(state, action, p) # p(s'|a,s)
-        
-        # Sample next state using probabilities
-        # example, probs = [0.90, 0.05, 0,05]
-        probs = [prob for prob, _ in transitions]
-        # get possible next states 
-        next_states = [next_s for _, next_s in transitions]
-        
-        # based on probabilities, get next state 
-        next_state = random.choices(next_states, weights=probs)[0]
 
-        state_row, state_column = state
-        next_state_row, next_state_column = next_state
-
-        # determine which action the episode actually took due to stochasticity 
-        if (next_state_row > state_row) and  (state_column == next_state_column):
-            actual_action = 'D'
-        elif (next_state_row < state_row) and  (state_column == next_state_column):
-            actual_action  = 'U'
-        elif (next_state_row == state_row) and  (state_column < next_state_column):
-            actual_action  = 'R'
-        elif (next_state_row == state_row) and  (state_column > next_state_column):
-            actual_action  = 'L'
-        else: 
-            actual_action  = None # hit wall
-
-        # keep track of total reward
-        reward = get_reward(state, next_state)
-        total_reward += reward
-
-        cumulative_rewards.append(total_reward) # keep track of reward at each time step
-        
-        trajectory.append((state, actual_action)) # keep track of sample trajectory of states and directions
-        
-        # update states
-        state = next_state
-
-    xs, ys = plot_optimal_path(trajectory, toggle)
-    if toggle == True:
-        plt.title("Sample Episode Path")
-        plt.show()
-    print("Sample Episode length:", len(trajectory), "steps")
-    print("Total reward:", total_reward, "\n")
-
-    return xs, ys, cumulative_rewards
-
-
-#This function calculates and plots the average cumulative reward across 10 simulations 
-def average_cumulative_reward(policy, state_index, p):
-    
-    Tmax = 400
-    trajectories = []
-    taus = []
-    num_episodes = 10
-    
-    # Run 10 simulations
-    for i in range(num_episodes):
-        x, y, cum_rewards = simulate_episode(policy, state_index, toggle=False, p=p, Tmax=400)
-        tau = len(cum_rewards) # termination time (number of steps until reached goal)
-        trajectories.append(cum_rewards) #keep track of all cumulative reward trajectories
-        taus.append(tau) # keep track of all termination times
-    
-    # Define T_p
-    T_p = max(taus)
-    
-    # Extend trajectories to length T_p
-    cum_reward_full_length = []
-    padding = []
-    
-    for cum_rewards in trajectories:
-        if len(cum_rewards) < T_p:
-            last_value = cum_rewards[-1] # accesses last element in array
-            padding = [last_value] * (T_p - len(cum_rewards)) # find out length difference between Tp and cum_reward array
-            cum_reward_full_length.append(cum_rewards + padding) # keep reward constant until it reaches Tp
-        else:
-            cum_reward_full_length.append(cum_rewards) # if length is same as Tp, keep the same 
-    
-    cum_reward_full_length = np.array(cum_reward_full_length)
-    
-    # Calculate Average cumulative reward curve
-    G_bar = np.mean(cum_reward_full_length, axis=0)
-
-    plt.plot(range(T_p), G_bar, label=f"p = {p}")
-    plt.xlabel("Time step t")
-    plt.ylabel("Average cumulative reward")
-    plt.legend()
-    plt.title("Average Cumulative Reward Curves")
 
 # defines the e-greedy policy to find next action
 def epsilon_greedy(Q, state, epsilon):
@@ -338,13 +213,39 @@ def epsilon_greedy(Q, state, epsilon):
     # exploitation (greedy) with prob 1-e
     return actions[np.argmax(Q[r,c,:])] # find index of largest Q value for that state, this is your selected action A
 
+
+def greedy_policy_valid_path_check(Q, start_state, goal_state, max_steps=1000):
+    current_state = start_state
+    step_count = 0
+
+    while step_count < max_steps:
+
+        if current_state == goal_state:
+            return True # it found a valid path!
+        
+        r, c = current_state # get index of current state
+
+        # take the greedy action only 
+        best_action_index = np.argmax(Q[r, c, :])
+        action = actions[best_action_index] # find the optimal action
+
+        next_state = move_updates(current_state, action) # find the next state based on the optimal action
+
+        current_state = next_state # update
+        step_count += 1
+
+    return False # if it can't get to the goal state in 1000 steps or less, it isn't a valid path
+
 # Performs the SARSA algorithm
-def SARSA_algorithm(states, state_index, p, gamma, alpha):
+def SARSA_algorithm(states, state_index, p, gamma, alpha, epsilon):
     num_rows, num_cols = State_Matrix.shape
     max_steps = 1000 # each episode can only last up to 1000 steps
     all_Q = []  # initialize Q-table to 0
-    goal_reached_count = 0
-    num_episode = 0
+    first_valid_episode = 1000 
+    valid_path_flag = False
+    avg_rewards = np.zeros((1, 1000)) # initialize accumulated reward for each episode and run
+    first_path_episode_per_run = []
+
     for run in range(1): #repeat for 10 runs 
         print(f"Run {run+1}") # keep track of which run we are on
         # Q(s,a)
@@ -353,8 +254,9 @@ def SARSA_algorithm(states, state_index, p, gamma, alpha):
             # starting state (blue square)
             state = start_state # "S" in SARSA
             r, c = state # keep track of location of current state
-            action = epsilon_greedy(Q, state, epsilon=0.3) # choose action according to pi_e_greedy, this is A in SARS'A'
+            action = epsilon_greedy(Q, state, epsilon=epsilon) # choose action according to pi_e_greedy, this is A in SARS'A'
             a_idx = action_to_idx[action] # find the index of the action
+            episode_reward = 0
             for step in range(max_steps):
                 # transition probabilities
                 transitions = get_transitions(state, action, p) # get transition probability p(s'|s,a)
@@ -364,24 +266,40 @@ def SARSA_algorithm(states, state_index, p, gamma, alpha):
                 next_state = next_states[idx] # This is S' in "SARS'A' 
                 nr, nc = next_state # keep track of location of next state S'
                 reward = get_reward(state, next_state) # calculate reward  R This is R in SARSA
-                next_action = epsilon_greedy(Q, next_state, epsilon=0.3) # This is A' in SARS'A'
+                episode_reward += reward # accumulate reward for this episode
+                next_action = epsilon_greedy(Q, next_state, epsilon=epsilon) # This is A' in SARS'A'
                 nexta_idx = action_to_idx[next_action] # find the index of A'
-                if np.isnan(State_Matrix[nr, nc]): # do not update walls (they are not valid states)
-                    continue
                 # SARSA update
                 # Q(s,a) = Q(s,a) + alpha*[R + gamma*Q(s',a')-Q(s,a)]
-                Q[r, c, a_idx] = Q[r, c, a_idx] + alpha * (reward + gamma * Q[nr, nc, nexta_idx] - Q[r, c, a_idx])
+                if next_state == goal_state:
+                    Q[r, c, a_idx] = Q[r, c, a_idx] + alpha * (reward - Q[r, c, a_idx])
+                else: 
+                    Q[r, c, a_idx] = Q[r, c, a_idx] + alpha * (reward + gamma * Q[nr, nc, nexta_idx] - Q[r, c, a_idx])
                 # Update states/actions so that next state/action becomes current state/action, to prepare for next iteration
                 state = next_state
                 action = next_action
+                a_idx = action_to_idx[action] # update action index as well
+                r, c = state # update index as well
                 if state == goal_state:
-                    goal_reached_count+=1 # keep track of how many times the goal state was reached 
-                    num_episode = episode
                     break # you have reached goal and are done
-        all_Q.append(Q) #update Q-table 
+
+            avg_rewards[run, episode] = episode_reward # store accumulated reward for that specific episode and run
+            if not valid_path_flag:
+                if greedy_policy_valid_path_check(Q, start_state, goal_state):
+                    first_valid_episode = episode
+                    valid_path_flag = True
+        
+
+        all_Q.append(Q) #update Q-table for that run
+        first_path_episode_per_run.append(first_valid_episode)
     
-    print("Goal reached:", goal_reached_count, "times")
-    print("During training, the first valid path (from start to goal) was produced at episode number", num_episode)
+    
+    average_reward_per_episode = np.mean(avg_rewards, axis=0) # calculate the average reward across all 10 runs, per episode number
+    
+    print("First valid greedy path episode for each run:")
+    for i, ep in enumerate(first_path_episode_per_run):
+        print(f"Run {i+1}: Episode {ep}")
+
     # average Q over runs
     Q_avg = np.mean(all_Q, axis=0) # This is average Q-values over all 10 runs
     Q = all_Q[0] # just get values from Q-table
@@ -446,7 +364,7 @@ def SARSA_algorithm(states, state_index, p, gamma, alpha):
             current_state = move_updates(current_state, action)
             step_count += 1
 
-    return V, policy, optimal_path
+    return policy, optimal_path, average_reward_per_episode
             
 
 ######################################################################################################################################
@@ -463,12 +381,19 @@ def main():
                 state_index[(i,j)] = idx
 
     # SARSA ALGORITHM
-    V_star, optimal_policy, optimal_path = SARSA_algorithm(states, state_index, p=0.025, gamma=0.96, alpha=0.25)
+    optimal_policy, optimal_path, avg_accum_reward = SARSA_algorithm(states, state_index, p=0.025, gamma=0.96, alpha=0.25, epsilon=0.1)
     plot_optimal_policy(states, state_index, optimal_policy)
     plot_optimal_path(optimal_path, toggle=True)
     plt.title("Optimal Path")
     plt.show()
- 
+
+    
+    plt.figure(figsize=(10,6))
+    plt.plot(avg_accum_reward)
+    plt.xlabel("Episode")
+    plt.ylabel("Average Accumulated Reward")
+    plt.title("Average Accumulated Reward vs Episode (10 Runs)")
+    plt.show()
 
 
 if __name__ == "__main__":
