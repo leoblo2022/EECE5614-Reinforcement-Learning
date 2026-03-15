@@ -42,16 +42,15 @@ actions = [
     np.array([0,0,1,0]),  # a3
     np.array([0,0,0,1])   # a4
 ]
-
 action_cost = [0,1,1,0]
 
 
 # Reward function
 def reward(s_next, a_index):
-    cost = action_cost[a_index]
+    cost = action_cost[a_index] # get the cost for that action 
+    # R(s,a,s') = 5s1' + 5s2' + 5s3' + 5s4' - c(a)
     reward = 5*s_next[0] + 5*s_next[1] + 5*s_next[2] + 5*s_next[3] - cost # This is R(s,a,s') 
     
-
     return reward 
 
 
@@ -66,20 +65,20 @@ def epsilon_greedy(Q, state_index, epsilon):
         return np.argmax(Q[state_index])
 
 
-# helper function finds next state 
-def next_state(s, a, p):
-
+# helper function that finds next state based on Bernoulli noise and connectivity matrix 
+def next_state(sk_1, ak_1, p):
     # deterministic part
-    v = C @ s
-    C_sk_1 = (v > 0).astype(int) # threshold to 1 if greater than 0, 0 otherwise
+    v_bar = C @ sk_1
+    C_sk_1 = (v_bar > 0).astype(int) # threshold to 1 if greater than 0, 0 otherwise
     # noise
-    noise = np.random.binomial(1, p, 4) # Bernoulli distribution
+    nk = np.random.binomial(1, p, 4) # Bernoulli distribution for j=1,...,4
     # XOR operation
-    s_next = (C_sk_1 ^ a ^ noise)
-    return s_next
+    s_k = (C_sk_1 ^ ak_1 ^ nk)
+    return s_k
 
-
+# This helper function records how many times each state is visted during 1 run
 def visited_states(greedy_policy, p):
+    # initialization
     test_episodes = 100
     state_visits = np.zeros(16)
     for episode in range(test_episodes):
@@ -93,78 +92,93 @@ def visited_states(greedy_policy, p):
             state_visits[s_index] += 1
 
             # greedy action
-            a_index = greedy_policy[s_index]
+            a_index = greedy_policy[s_index] # a = pi_egreedy(s)
 
-             # Now, find next state given transition probabilities and best action
-            s = next_state(s, actions[a_index], p)
+             # Now, find next state given transition probabilities and greedy action
+            s = next_state(s, actions[a_index], p) # s = s'
     
     return state_visits
 
 
-
+# SARSA ALGORITHM
 def SARSA_algorithm(gamma, alpha, epsilon, p):
     # initializations 
     all_rewards = [] 
     policies = []
+    num_episodes = 1000
+    num_runs = 10
+    num_steps = 100
 
-    for run in range(2):
+    ########### TRAINING of ALGORITHM ####### 
+    for run in range(num_runs):
+        print(f"Run {run+1}") # keep track of which run we are on
         # initializations for each run
-        Q = np.zeros((16,4)) # 16 states, each have 4 possible actions
+        Q = np.zeros((16,4)) # Initialize Q(s,a) arbitrarily 
         episode_rewards = []
 
-        for episode in range(1000):
+        for episode in range(num_episodes):
+
+             # STEP 1: THE S IN S-->A-->R-->S'-->A'
             s = random.choice(states).copy() # start with a random first state, S of SARS'A'
             for idx, state in enumerate(states): # find the index of the given state 
                 if np.array_equal(state, s):
                     s_index = idx
+            
+            # STEP 2: THE A IN S-->A-->R-->S'-->A'
             a = epsilon_greedy(Q, s_index, epsilon) #A of SARS'A' using epsilon greedy policy
             total_reward = 0
 
-            for step in range(100):
+            # Repeat, for each step of episode 
+            for step in range(num_steps):
+
+                # STEP 3: THE S' IN S-->A-->R-->S'-->A'
                 s_next = next_state(s, actions[a], p) # find S' of SARS'A'
                 s_next_index = int("".join(map(str,s_next)),2)
 
+                # STEP 4: THE R IN S-->A-->R-->S'-->A'
                 r = reward(s_next, a) # This is R of SARS'A'
 
+                # STEP 5: THE A' IN S-->A-->R-->S'-->A'
                 a_next = epsilon_greedy(Q, s_next_index, epsilon) # This is A' of SARS'A'
 
+                # STEP 6: Perform SARSA update
                 # SARSA update: Q(s,a) = Q(s,a) + alpha*[R+gamma*Q(s',a')-Q(s,a)]
                 Q[s_index, a] = Q[s_index, a] + alpha * (r + gamma * Q[s_next_index, a_next] - Q[s_index, a])
 
-                # Updates: Let s = s' and a = a'
-                s = s_next
+                # STEP 7: Update states
+                s = s_next # s = s' 
                 s_index = s_next_index
-                a = a_next
+                a = a_next # a = a'
 
-                total_reward += r # keep track of total reward 
+                total_reward += r # keep track of accumulated reward 
 
-            episode_rewards.append(total_reward) # keep track of total reward per episode 
+            episode_rewards.append(total_reward) # keep track of  accumulated reward per episode 
 
-        all_rewards.append(episode_rewards) # keep track of rewards per run 
+        all_rewards.append(episode_rewards) # keep track of accumulared rewards across epusodes for each run  
 
         # Keep track of optimal policy for each run
         policy = np.argmax(Q, axis=1)   # best action for each state argmax(Q(s,a))
         policies.append(policy)
 
-    
-    # after training, record how many times each of the 16 states is visited during execution
+    ######### AFTER TRAINING ########
+
+    # STEP 1: record how many times each of the 16 states is visited during execution
     state_visits = visited_states(policy, p)
     print("State visitation counts:")
-    print(state_visits.reshape(16,1))    
-    
-    action_labels = ['a1','a2','a3','a4'] 
+    print(state_visits.reshape(16,1))
 
+
+    # STEP 2: Show the optimal policy for all independent runs 
+    action_labels = ['a1','a2','a3','a4'] 
     # Convert 0 to a1, 1 to a2, 2 to a3, and 3 to a4
     for run, policy in enumerate(policies):
         print(f"Run {run+1} optimal policy:")
         for s_index, action in enumerate(policy):
-            print(states[s_index], "->", action_labels[action])
-            print()
-
+            print(states[s_index], "->", action_labels[action]) # mapping of state to action
+    print()
     
-    # Average accumulated reward 
+    # STEP 3: Show average accumulated reward across 10 runs with respect to episode number
     avg_rewards = np.mean(all_rewards, axis=0) # compute average reward across episodes per run
-
     plt.plot(avg_rewards)
     plt.xlabel("Episode")
     plt.ylabel("Average Accumulated Reward")
