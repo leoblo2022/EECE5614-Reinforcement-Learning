@@ -343,7 +343,7 @@ def SARSA_algorithm(states, state_index, p, gamma, alpha, epsilon):
         all_Q.append(Q) #update Q-table for that run
     
 
-     ######### AFTER TRAINING ########
+    ######### AFTER TRAINING ########
 
     # STEP 1: compute average accumulated reward 
     # calculate the average reward across all 10 runs, per episode number
@@ -392,6 +392,7 @@ def main():
                 state_index[(i,j)] = idx
 
     # SARSA ALGORITHM
+    print("Evalulating the SARSA Algorithm")
     optimal_policy, optimal_path, avg_accum_reward = SARSA_algorithm(states, state_index, p=0.025, gamma=0.96, alpha=0.25, epsilon=0.1)
     plot_optimal_policy(states, state_index, optimal_policy)
     plot_optimal_path(optimal_path, toggle=True)
@@ -403,8 +404,22 @@ def main():
     plt.plot(avg_accum_reward)
     plt.xlabel("Episode")
     plt.ylabel("Average Accumulated Reward")
-    plt.title("Average Accumulated Reward vs Episode (10 Runs)")
+    plt.title("SARSA: Average Accumulated Reward vs Episode (10 Runs)")
     plt.show()
+    
+
+    print("Comparing different learning rates (alpha)")
+    alpha_list = [0.05, 0.1, 0.25, 0.5]
+    plt.figure(figsize=(10,6))
+    for i in range(4):
+        optimal_policy, optimal_path, avg_accum_reward = SARSA_algorithm(states, state_index, p=0.025, gamma=0.96, alpha=alpha_list[i], epsilon=0.1)
+        plt.plot(avg_accum_reward, label=f"Alpha = {alpha_list[i]}")
+        plt.xlabel("Episode")
+        plt.ylabel("Average Accumulated Reward")
+        plt.title("Average Accumulated Reward for Different Learning Rates using SARSA")
+        plt.legend()
+    plt.show()
+
 
 
 if __name__ == "__main__":
