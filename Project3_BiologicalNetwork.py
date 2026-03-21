@@ -164,7 +164,7 @@ def SARSA_algorithm(gamma, alpha, epsilon, p):
 
     # STEP 1: record how many times each of the 16 states is visited during execution
     state_visits = visited_states(policy, p)
-    print("State visitation counts:")
+    print("State visitation counts for SARSA algorithm:")
     print(state_visits.reshape(16,1))
 
 
@@ -184,11 +184,115 @@ def SARSA_algorithm(gamma, alpha, epsilon, p):
     plt.ylabel("Average Accumulated Reward")
     plt.title("SARSA: Average Reward vs Episode (10 runs)")
     plt.show()
+
+    return avg_rewards
             
+# SARSA ALGORITHM
+def Q_Learning_algorithm(gamma, alpha, epsilon, p):
+    # initializations 
+    all_rewards = [] 
+    policies = []
+    num_episodes = 1000
+    num_runs = 10
+    num_steps = 100
+
+    ########### TRAINING of ALGORITHM ####### 
+    for run in range(num_runs):
+        print(f"Run {run+1}") # keep track of which run we are on
+        # initializations for each run
+        Q = np.zeros((16,4)) # Initialize Q(s,a) arbitrarily 
+        episode_rewards = []
+
+        for episode in range(num_episodes):
+
+             # STEP 1: find the state S (initialize randomly)
+            s = random.choice(states).copy() # start with a random first state
+            for idx, state in enumerate(states): # find the index of the given state 
+                if np.array_equal(state, s):
+                    s_index = idx
+            
+            total_reward = 0
+
+            # Repeat, for each step of episode 
+            for step in range(num_steps):
+
+                # STEP 2: Choose a from s using policy derived from e_greedy
+                a = epsilon_greedy(Q, s_index, epsilon) 
+
+                # STEP 3: find the next state S' according to the action chosen
+                s_next = next_state(s, actions[a], p) 
+                s_next_index = int("".join(map(str,s_next)),2)
+
+                # STEP 4: Observe the reward Rt+1
+                r = reward(s_next, a) 
+
+                # STEP 5: Q-learning update: Find max Q(s', a)
+                Q_max = np.max(Q[s_next_index])
+
+                # STEP 6: Perform Q-learning update
+                # Q(s,a) = Q(s,a) + alpha*[R+gamma*maxQ(s',a)-Q(s,a)]
+                Q[s_index, a] = Q[s_index, a] + alpha * (r + gamma * Q_max  - Q[s_index, a])
+
+                # STEP 7: Update states
+                s = s_next # s = s' 
+                s_index = s_next_index
+
+                total_reward += r # keep track of accumulated reward 
+
+            episode_rewards.append(total_reward) # keep track of  accumulated reward per episode 
+
+        all_rewards.append(episode_rewards) # keep track of accumulared rewards across epusodes for each run  
+
+        # Keep track of optimal policy for each run
+        policy = np.argmax(Q, axis=1)   # best action for each state argmax(Q(s,a))
+        policies.append(policy)
+
+    ######### AFTER TRAINING ########
+
+    # STEP 1: record how many times each of the 16 states is visited during execution
+    state_visits = visited_states(policy, p)
+    print("State visitation counts for Q-learning algorithm:")
+    print(state_visits.reshape(16,1))
+
+
+    # STEP 2: Show the optimal policy for all independent runs 
+    action_labels = ['a1','a2','a3','a4'] 
+    # Convert 0 to a1, 1 to a2, 2 to a3, and 3 to a4
+    for run, policy in enumerate(policies):
+        print(f"Run {run+1} optimal policy:")
+        for s_index, action in enumerate(policy):
+            print(states[s_index], "->", action_labels[action]) # mapping of state to action
+    print()
+    
+    # STEP 3: Show average accumulated reward across 10 runs with respect to episode number
+    avg_rewards = np.mean(all_rewards, axis=0) # compute average reward across episodes per run
+    plt.plot(avg_rewards)
+    plt.xlabel("Episode")
+    plt.ylabel("Average Accumulated Reward")
+    plt.title("Q-Learning: Average Reward vs Episode (10 runs)")
+    plt.show()
+
+    return avg_rewards
+
 
 def main():
+    print("Running the SARSA Algorithm")
+    avg_rewards_sarsa = SARSA_algorithm(gamma=0.9, alpha = 0.25, epsilon = 0.15, p=0.1)
 
-    SARSA_algorithm(gamma=0.9, alpha = 0.25, epsilon = 0.15, p=0.1)
+    print("\nRunning the Q-Learning Algorithm")
+    avg_rewards_q_learning = Q_Learning_algorithm(gamma=0.9, alpha = 0.25, epsilon = 0.15, p=0.1)
+    
+    # plot all accumulated rewards on same plot for different algorithms
+    plt.figure(figsize=(10,6))
+    plt.plot(avg_rewards_sarsa, label="SARSA")
+    plt.xlabel("Episode")
+    plt.ylabel("Average Accumulated Reward")
+    plt.title("Average Reward vs Episode (10 runs)")
+    plt.plot(avg_rewards_q_learning,  label="Q-Learning")
+    plt.legend()
+    plt.show()
+
+
 
 if __name__ == "__main__":
     main()
