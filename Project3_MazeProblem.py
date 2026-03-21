@@ -266,8 +266,40 @@ def build_optimal_policy_and_path(Q, states, state_index, run_idx):
         return successful_run_found, policy, optimal_path
 
 
+# This helper function performs the following steps:
+#1) Reports first episode where the greedy policy produced valid path from start to goal
+#2) Find how many times among all runs, a path from start to goal has been obtained
+def find_valid_paths_per_run(states, state_index, first_valid_episode, all_Q, algorithm_type):
+    # STEP 1: Report first episode where the greedy policy produced valid path from start to goal
+    if first_valid_episode < 1000:
+        print("First episode where the greedy policy produced valid path from start to goal for", algorithm_type, "is episode", first_valid_episode)
+    else:
+        print("A valid greedy path was never reached for the", algorithm_type, "algorithm")
+
+    # STEP 2: Find how many times among all runs, a path from start to goal has been obtained
+    Q = all_Q[0] # just get values from Q-table 
+    successful_run_found = False  # Initialize Flag to check if a run reached the goal
+
+    for run_idx, Q in enumerate(all_Q): #look through Q-values of all 10 runs 
+        successful_run_found, policy, path = build_optimal_policy_and_path(Q, states, state_index, run_idx)
+        # If this run reached the goal plot the optimal policy and path for this run 
+        if successful_run_found:
+            optimal_policy = policy
+            optimal_path = path
+
+    if successful_run_found:
+        return optimal_policy, optimal_path
+
+    # If no run reached the goal, just take a random run
+    if not successful_run_found:
+        print("No run reached the goal. Using a random run for visualization.")
+        run_idx = random.randint(0, len(all_Q)-1) # choose a random run (length of all_Q is 10)
+        Q = all_Q[run_idx] #get the Q values for that specific run
+        successful_run_found, policy, path = build_optimal_policy_and_path(Q, states, state_index, run_idx)
+        return policy, path
+
 # SARSA ALGORITHM
-def SARSA_algorithm(states, state_index, p, gamma, alpha, epsilon):
+def SARSA_algorithm(states, state_index, p, gamma, alpha, epsilon, flag):
     # Initializations 
     num_rows, num_cols = State_Matrix.shape
     num_runs = 10
@@ -344,38 +376,95 @@ def SARSA_algorithm(states, state_index, p, gamma, alpha, epsilon):
     
 
     ######### AFTER TRAINING ########
-
     # STEP 1: compute average accumulated reward 
-    # calculate the average reward across all 10 runs, per episode number
     average_reward_per_episode = np.mean(avg_rewards, axis=0)
+
+    if flag == 1:
+        policy, path = find_valid_paths_per_run(states, state_index, first_valid_episode, all_Q, algorithm_type="SARSA")
+        return(policy, path, average_reward_per_episode)
+    else: 
+        return [], [], average_reward_per_episode
+
+# Q-Learning ALGORITHM
+def Q_Learning_algorithm(states, state_index, p, gamma, alpha, epsilon):
+    # Initializations 
+    num_rows, num_cols = State_Matrix.shape
+    num_runs = 10
+    num_episodes = 1000
+    max_steps = 1000 # each episode can only last up to 1000 steps
+    all_Q = []  # initialize Q-table 
+    first_valid_episode = 1000 
+    valid_path_flag = False
+    avg_rewards = np.zeros((num_runs, num_episodes)) # initialize accumulated reward for each episode and run
+
+    ########### TRAINING of ALGORITHM ####### 
+    for run in range(num_runs): #repeat for 10 runs 
+        print(f"Run {run+1}") # keep track of which run we are on
+        Q = np.zeros((num_rows, num_cols, len(actions))) # Initialize Q(s,a) arbitrarily 
+
+        for episode in range(num_episodes): # limit to 1000 episodes for each run
+            
+            # STEP 1: Get state S (start with starting state)
+            state = start_state # blue starting square 
+            r, c = state # keep track of index of current state
+
+            episode_reward = 0
+            # Repeat (for each step of episode)
+            for step in range(max_steps):
+
+                # STEP 2: choose a from s using policy derived from e_greedy
+                action = epsilon_greedy(Q, state, epsilon=epsilon) # choose action according to e_greedy policy, this is A in SARS'A'
+                a_idx = action_to_idx[action] # find the index of the action
+
+
+                # STEP 3: THE get next state S' based on the selected a and the transition probabilities
+                transitions = get_transitions(state, action, p) # get transition probability p(s'|s,a)
+                probs = [t[0] for t in transitions] # gets all probabilities based on action
+                next_states = [t[1] for t in transitions] # gets all possible next states based on initial action
+                idx = np.random.choice(len(next_states), p=probs) # randomly chooses next state based on transition probabilities
+                next_state = next_states[idx] # This is S' in "SARS'A' 
+                nr, nc = next_state # keep track of location of next state S'
+
+                # STEP 4: Observe the reward Rt+1
+                reward = get_reward(state, next_state) # calculate reward  R This is R in SARSA
+                episode_reward += reward # accumulate reward for this episode
+
+                # STEP 5: Q-learning update, get max Q(S,a)
+                best_next_Q = np.max(Q[nr, nc, :])  # max over actions
+
+                # STEP 6: Perform Q-Learning update
+                # Q(s,a) = Q(s,a) + alpha*[R + gamma*max Q(s',a)-Q(s,a)]
+                if next_state == goal_state:
+                    Q[r, c, a_idx] = Q[r, c, a_idx] + alpha * (reward - Q[r, c, a_idx])
+                else: 
+                    Q[r, c, a_idx] = Q[r, c, a_idx] + alpha * (reward + gamma * best_next_Q - Q[r, c, a_idx])
+
+                # STEP 7: Update states
+                state = next_state #s = s', becomes new S in SARSA
+                r, c = state # update index as well
+                
+                # STEP 8: Repeat until S is terminal 
+                if state == goal_state:
+                    break # you have reached goal and are done
+            
+            # Store accumulated reward per run and episode 
+            avg_rewards[run, episode] = episode_reward # store accumulated reward for that specific episode and run
+
+            # Find the first episode to form a valid path during training 
+            if not valid_path_flag: # if a valid path has not yet been found 
+                if greedy_policy_valid_path_check(Q, start_state, goal_state): #if returns true 
+                    first_valid_episode = episode # This is the first episode to find a valid path 
+                    valid_path_flag = True
+        
+        all_Q.append(Q) #update Q-table for that run
     
-    # STEP 2: Report first episode where the greedy policy produced valid path from start to goal
-    if first_valid_episode < 1000:
-        print("First episode where the greedy policy produced valid path from start to goal for SARSA is episode", first_valid_episode)
-    else:
-        print("A valid greedy path was never reached for the SARSA algorithm")
 
-    # STEP 3: Find how many times among all runs, a path from start to goal has been obtained
-    Q = all_Q[0] # just get values from Q-table 
-    successful_run_found = False  # Initialize Flag to check if a run reached the goal
+    ######### AFTER TRAINING ########
+    # STEP 1: compute average accumulated reward 
+    average_reward_per_episode = np.mean(avg_rewards, axis=0)
 
-    for run_idx, Q in enumerate(all_Q): #look through Q-values of all 10 runs 
-        successful_run_found, policy, path = build_optimal_policy_and_path(Q, states, state_index, run_idx)
-        # If this run reached the goal plot the optimal policy and path for this run 
-        if successful_run_found:
-            optimal_policy = policy
-            optimal_path = path
-
-    if successful_run_found:
-        return optimal_policy, optimal_path, average_reward_per_episode
-    
-    # If no run reached the goal, just take a random run
-    if not successful_run_found:
-        print("No run reached the goal. Using a random run for visualization.")
-        run_idx = random.randint(0, len(all_Q)-1) # choose a random run (length of all_Q is 10)
-        Q = all_Q[run_idx] #get the Q values for that specific run
-        successful_run_found, policy, path = build_optimal_policy_and_path(Q, states, state_index, run_idx)
-        return policy, path, average_reward_per_episode
+    policy, path = find_valid_paths_per_run(states, state_index, first_valid_episode, all_Q, algorithm_type="Q-Learning")
+    return(policy, path, average_reward_per_episode)
             
 
 ######################################################################################################################################
@@ -393,26 +482,42 @@ def main():
 
     # SARSA ALGORITHM
     print("Evalulating the SARSA Algorithm")
-    optimal_policy, optimal_path, avg_accum_reward = SARSA_algorithm(states, state_index, p=0.025, gamma=0.96, alpha=0.25, epsilon=0.1)
+    optimal_policy, optimal_path, avg_accum_reward = SARSA_algorithm(states, state_index, p=0.025, gamma=0.96, alpha=0.25, epsilon=0.1, flag=1)
     plot_optimal_policy(states, state_index, optimal_policy)
     plot_optimal_path(optimal_path, toggle=True)
     plt.title("Optimal Path")
     plt.show()
 
-    
     plt.figure(figsize=(10,6))
     plt.plot(avg_accum_reward)
     plt.xlabel("Episode")
     plt.ylabel("Average Accumulated Reward")
     plt.title("SARSA: Average Accumulated Reward vs Episode (10 Runs)")
     plt.show()
+
+    # Q-Learning ALGORITHM
+    print("\nEvalulating the Q-Learning Algorithm")
+    optimal_policy, optimal_path, avg_accum_reward = Q_Learning_algorithm(states, state_index, p=0.025, gamma=0.96, alpha=0.25, epsilon=0.1)
+    plot_optimal_policy(states, state_index, optimal_policy)
+    plot_optimal_path(optimal_path, toggle=True)
+    plt.title("Optimal Path")
+    plt.show()
+
+    plt.figure(figsize=(10,6))
+    plt.plot(avg_accum_reward)
+    plt.xlabel("Episode")
+    plt.ylabel("Average Accumulated Reward")
+    plt.title("Q-Learning: Average Accumulated Reward vs Episode (10 Runs)")
+    plt.show()
+    
     
 
-    print("Comparing different learning rates (alpha)")
+    print("\nComparing different learning rates (alpha)")
     alpha_list = [0.05, 0.1, 0.25, 0.5]
     plt.figure(figsize=(10,6))
     for i in range(4):
-        optimal_policy, optimal_path, avg_accum_reward = SARSA_algorithm(states, state_index, p=0.025, gamma=0.96, alpha=alpha_list[i], epsilon=0.1)
+        print("Alpha = ",alpha_list[i])
+        optimal_policy, optimal_path, avg_accum_reward = SARSA_algorithm(states, state_index, p=0.025, gamma=0.96, alpha=alpha_list[i], epsilon=0.1, flag=0)
         plt.plot(avg_accum_reward, label=f"Alpha = {alpha_list[i]}")
         plt.xlabel("Episode")
         plt.ylabel("Average Accumulated Reward")
