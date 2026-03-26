@@ -413,7 +413,7 @@ def Q_Learning_algorithm(states, state_index, p, gamma, alpha, epsilon):
             for step in range(max_steps):
 
                 # STEP 2: choose a from s using policy derived from e_greedy
-                action = epsilon_greedy(Q, state, epsilon=epsilon) # choose action according to e_greedy policy, this is A in SARS'A'
+                action = epsilon_greedy(Q, state, epsilon=epsilon) # choose action according to e_greedy policy
                 a_idx = action_to_idx[action] # find the index of the action
 
 
@@ -465,7 +465,99 @@ def Q_Learning_algorithm(states, state_index, p, gamma, alpha, epsilon):
 
     policy, path = find_valid_paths_per_run(states, state_index, first_valid_episode, all_Q, algorithm_type="Q-Learning")
     return(policy, path, average_reward_per_episode)
-            
+
+def Actor_Critic_algorithm(states, state_index, p, gamma, alpha, beta):
+    # Initializations
+    num_rows, num_cols = State_Matrix.shape
+    num_runs = 2
+    num_episodes = 1000
+    max_steps = 1000
+    all_V = []
+    all_H = []
+    first_valid_episode = 1000
+    valid_path_flag = False
+    avg_rewards = np.zeros((num_runs, num_episodes))
+
+    ########### TRAINING ###########
+    for run in range(num_runs):
+        print(f"Run {run+1}")
+
+        # Initialize values V(s)
+        V = np.zeros((num_rows, num_cols)) 
+
+        # Initialize preferences H(s,a) 
+        H = np.zeros((num_rows, num_cols, len(actions))) 
+
+        for episode in range(num_episodes):
+
+            state = start_state # start from a random state 
+            r, c = state # get location of state
+            episode_reward = 0
+
+            for step in range(max_steps):
+
+                # ---- STEP 1: sample action from softmax policy ----
+                r, c = state
+                H_s = H[r, c, :] # get H(s,a) for all a
+                exp_vals = np.exp(H_s - np.max(H_s))  # for numerical stability
+                # get pi(a|s), or probabilities of each policy based on preferences H(s,a)
+                pi = exp_vals / np.sum(exp_vals) # e^H(s,a)/sum_over_a(e^H(s,a))
+
+                # select actoon at ~ pi(.|st) where pi(a|s) is shown above 
+                a_idx, pi =  np.random.choice(len(pi), p=pi), pi
+                action = actions[a_idx] # find the index of the action
+
+
+                # STEP 2: find st+1 based on action at and state transitions p(st,at) 
+                transitions = get_transitions(state, action, p)
+                probs_t = [t[0] for t in transitions]
+                next_states = [t[1] for t in transitions] # 
+                idx = np.random.choice(len(next_states), p=probs_t)
+                next_state = next_states[idx] #st+1
+                nr, nc = next_state # location of st+1
+
+                # STEP 3: Observe reward 
+                reward = get_reward(state, next_state) #Rt+1
+                episode_reward += reward # keep track of episode reward
+
+                # STEP 4: TD error = Rt+1 + gamma*V(st+1)-V(st)
+                if next_state == goal_state:
+                    delta = reward - V[r, c]
+                else:
+                    delta = reward + gamma * V[nr, nc] - V[r, c]
+
+                # STEP 5: Critic update: V(st) = V(st) + alpha*delta
+                V[r, c] = V[r, c] + (alpha * delta)
+
+                # STEP 6: Actor update: H(st,at) = H(st,at) + beta*delta*(1-pi(at|st))
+                pi_st = pi[a_idx]  # pi(at|st)
+                H[r, c, a_idx] =  H[r, c, a_idx] + beta * delta * (1 - pi_st)
+
+                # STEP 7: move to next state
+                state = next_state
+                r, c = state
+
+                if state == goal_state:
+                    break
+
+            avg_rewards[run, episode] = episode_reward
+
+            # Find the first episode to form a valid path during training 
+            if not valid_path_flag: # if a valid path has not yet been found 
+                if greedy_policy_valid_path_check(H, start_state, goal_state): #if returns true 
+                    first_valid_episode = episode # This is the first episode to find a valid path 
+                    valid_path_flag = True
+
+        all_V.append(V)
+        all_H.append(H)
+
+    ######### AFTER TRAINING ########
+    # STEP 1: compute average accumulated reward 
+    average_reward_per_episode = np.mean(avg_rewards, axis=0)
+
+    policy, path = find_valid_paths_per_run(states, state_index, first_valid_episode, all_H, algorithm_type="Actor-Critic")
+    return(policy, path, average_reward_per_episode)
+
 
 ######################################################################################################################################
 # **** MAIN FUNCTION ****
@@ -510,7 +602,21 @@ def main():
     plt.title("Q-Learning: Average Accumulated Reward vs Episode (10 Runs)")
     plt.show()
     
-    
+
+    # Actor-Critic ALGORITHM
+    print("\nEvalulating the Actor-Critic Algorithm")
+    optimal_policy, optimal_path, avg_accum_reward = Actor_Critic_algorithm(states, state_index, p=0.025, gamma=0.96, alpha=0.25, beta=0.05)
+    plot_optimal_policy(states, state_index, optimal_policy)
+    plot_optimal_path(optimal_path, toggle=True)
+    plt.title("Optimal Path")
+    plt.show()
+
+    plt.figure(figsize=(10,6))
+    plt.plot(avg_accum_reward)
+    plt.xlabel("Episode")
+    plt.ylabel("Average Accumulated Reward")
+    plt.title("Actor-Critic: Average Accumulated Reward vs Episode (10 Runs)")
+    plt.show()
 
     print("\nComparing different learning rates (alpha)")
     alpha_list = [0.05, 0.1, 0.25, 0.5]
