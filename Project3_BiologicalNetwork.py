@@ -118,7 +118,7 @@ def SARSA_algorithm(gamma, alpha, epsilon, p):
 
         for episode in range(num_episodes):
 
-             # STEP 1: THE S IN S-->A-->R-->S'-->A'
+            # STEP 1: THE S IN S-->A-->R-->S'-->A'
             s = random.choice(states).copy() # start with a random first state, S of SARS'A'
             for idx, state in enumerate(states): # find the index of the given state 
                 if np.array_equal(state, s):
@@ -186,8 +186,103 @@ def SARSA_algorithm(gamma, alpha, epsilon, p):
     plt.show()
 
     return avg_rewards
-            
-# SARSA ALGORITHM
+
+# SARSA-lambda algorithm         
+def SARSA_lambda(gamma, alpha, epsilon, lamda, p):
+    # initializations 
+    all_rewards = []
+    policies = []
+    num_episodes = 1000
+    num_runs = 10
+    num_steps = 100
+
+    ########### TRAINING ###########
+    for run in range(num_runs):
+        print(f"Run {run+1}")
+
+        Q = np.zeros((16,4))   # Q(s,a)
+        episode_rewards = []
+
+        for episode in range(num_episodes):
+
+            # Initialize eligibility traces
+            e = np.zeros((16,4)) # e(s,a)
+
+            # STEP 1: THE S IN S-->A-->R-->S'-->A'
+            s = random.choice(states).copy() # start with a random first state, S of SARS'A'
+            for idx, state in enumerate(states): # find the index of the given state 
+                if np.array_equal(state, s):
+                    s_index = idx
+
+             # STEP 2: THE A IN S-->A-->R-->S'-->A'
+            a = epsilon_greedy(Q, s_index, epsilon) #A of SARS'A' using epsilon greedy policy
+            total_reward = 0
+
+            for step in range(num_steps):
+
+                # STEP 3: THE S' IN S-->A-->R-->S'-->A'
+                s_next = next_state(s, actions[a], p) # find S' of SARS'A'
+                s_next_index = int("".join(map(str,s_next)),2)
+
+                # STEP 4: THE R IN S-->A-->R-->S'-->A'
+                r = reward(s_next, a) # This is R of SARS'A'
+
+                # STEP 5: THE A' IN S-->A-->R-->S'-->A'
+                a_next = epsilon_greedy(Q, s_next_index, epsilon) # This is A' of SARS'A'
+
+                # STEP 6: Compute TD error
+                delta = r + gamma * Q[s_next_index, a_next] - Q[s_index, a]
+                # Step 7: Increment eligibility trace
+                e[s_index, a] =  e[s_index, a] + 1
+
+                # STEP 8: Update Q and e for all s and a
+                Q = Q + alpha * delta * e # Q(s,a)
+                e = e * gamma * lamda # for all e(s,a), decrease weight of eligibility trace 
+
+                # STEP 9: Update states
+                s = s_next # s = s' 
+                s_index = s_next_index
+                a = a_next # a = a'
+
+                total_reward += r
+
+            episode_rewards.append(total_reward)
+
+        all_rewards.append(episode_rewards)
+
+        # Store learned policy
+        policy = np.argmax(Q, axis=1)
+        policies.append(policy)
+
+    ######### AFTER TRAINING ########
+
+    # STEP 1: record how many times each of the 16 states is visited during execution
+    state_visits = visited_states(policy, p)
+    print("State visitation counts for SARSA-Lambda algorithm:")
+    print(state_visits.reshape(16,1))
+
+
+    # STEP 2: Show the optimal policy for all independent runs 
+    action_labels = ['a1','a2','a3','a4'] 
+    # Convert 0 to a1, 1 to a2, 2 to a3, and 3 to a4
+    for run, policy in enumerate(policies):
+        print(f"Run {run+1} optimal policy:")
+        for s_index, action in enumerate(policy):
+            print(states[s_index], "->", action_labels[action]) # mapping of state to action
+    print()
+    
+    # STEP 3: Show average accumulated reward across 10 runs with respect to episode number
+    avg_rewards = np.mean(all_rewards, axis=0) # compute average reward across episodes per run
+    plt.plot(avg_rewards)
+    plt.xlabel("Episode")
+    plt.ylabel("Average Accumulated Reward")
+    plt.title("SARSA-Lambda: Average Reward vs Episode (10 runs)")
+    plt.show()
+
+    return avg_rewards
+
+
+# Q-Learning ALGORITHM
 def Q_Learning_algorithm(gamma, alpha, epsilon, p):
     # initializations 
     all_rewards = [] 
@@ -274,21 +369,127 @@ def Q_Learning_algorithm(gamma, alpha, epsilon, p):
 
     return avg_rewards
 
+def Actor_Critic(gamma, alpha, beta, p):
+    # initializations 
+    all_rewards = []
+    policies = []
+    num_episodes = 1000
+    num_runs = 10
+    num_steps = 100
+
+    ########### TRAINING ###########
+    for run in range(num_runs):
+        print(f"Run {run+1}")
+
+        # Initialize values V(s)=0
+        V = np.zeros(16)
+        # Initialize preferences H(s,a)=0
+        H = np.zeros((16,4))
+        episode_rewards = []
+
+        
+        for episode in range(num_episodes):
+
+             # STEP 1: start from a random state s0
+            s = random.choice(states).copy() # start with a random first state
+            for idx, state in enumerate(states): # find the index of the given state 
+                if np.array_equal(state, s):
+                    s_index = idx
+            
+            total_reward = 0
+
+            # Repeat, for each step of episode 
+            for step in range(num_steps):
+
+                # STEP 1: Define policy pi(a|s)
+                preferences = H[s_index]
+                exp_prefs = np.exp(preferences - np.max(preferences))  # stability trick
+                pi = exp_prefs / np.sum(exp_prefs) # pi(.|s) 
+
+                # STEP 2: Select action: at ~ pi(.|s)
+                a = np.random.choice(len(actions), p=pi)
+
+                # STEP 3: Take action at, move to state st+1
+                s_next = next_state(s, actions[a], p)
+                s_next_index = int("".join(map(str, s_next)), 2) # get index of state st+1
+
+                # STEP 4: observe reward Rt+1
+                r = reward(s_next, a)
+
+                # STEP 5: Td Error
+                delta = r + gamma * V[s_next_index] - V[s_index]
+
+                # STEP 6: CRITIC UPDATE 
+                V[s_index] = V[s_index] + alpha * delta
+
+                # STEP 6: ACTOR UPDATE 
+                H[s_index, a] = H[s_index, a]  + beta * delta * (1 - pi[a])
+
+                # STEP 7: t= t+1
+                s = s_next # update states: s = s'
+                s_index = s_next_index
+
+                total_reward += r
+
+            episode_rewards.append(total_reward)
+
+        all_rewards.append(episode_rewards)
+
+        # find "greedy" policy
+        policy = []
+        for s_idx in range(16):
+            policy.append(np.argmax(H[s_idx]))  #greedy from H is argmax of preferences
+        policies.append(np.array(policy))
+
+     ######### AFTER TRAINING ########
+    # STEP 1: record how many times each of the 16 states is visited during execution
+    state_visits = visited_states(policy, p)
+    print("State visitation counts for Actor-Critic algorithm:")
+    print(state_visits.reshape(16,1))
+
+
+    # STEP 2: Show the optimal policy for all independent runs 
+    action_labels = ['a1','a2','a3','a4'] 
+    # Convert 0 to a1, 1 to a2, 2 to a3, and 3 to a4
+    for run, policy in enumerate(policies):
+        print(f"Run {run+1} optimal policy:")
+        for s_index, action in enumerate(policy):
+            print(states[s_index], "->", action_labels[action]) # mapping of state to action
+    print()
+    
+    # STEP 3: Show average accumulated reward across 10 runs with respect to episode number
+    avg_rewards = np.mean(all_rewards, axis=0) # compute average reward across episodes per run
+    plt.plot(avg_rewards)
+    plt.xlabel("Episode")
+    plt.ylabel("Average Accumulated Reward")
+    plt.title("Actor-Critic: Average Reward vs Episode (10 runs)")
+    plt.show()
+
+    return avg_rewards
 
 def main():
+    
     print("Running the SARSA Algorithm")
     avg_rewards_sarsa = SARSA_algorithm(gamma=0.9, alpha = 0.25, epsilon = 0.15, p=0.1)
 
     print("\nRunning the Q-Learning Algorithm")
     avg_rewards_q_learning = Q_Learning_algorithm(gamma=0.9, alpha = 0.25, epsilon = 0.15, p=0.1)
-    
+
+    print("\nRunning the SARSA-Lambda Algorithm")
+    avg_rewards_sarsa_lambda = SARSA_lambda(gamma=0.9, alpha=0.25, epsilon=0.15, lamda=0.95, p=0.1)
+
+    print("\nRunning the Acor-Critic Algorithm")
+    avg_rewards_actor_critic = Actor_Critic(gamma=0.9, alpha=0.25, beta=0.05, p=0.1)
+
     # plot all accumulated rewards on same plot for different algorithms
     plt.figure(figsize=(10,6))
     plt.plot(avg_rewards_sarsa, label="SARSA")
+    plt.plot(avg_rewards_q_learning,  label="Q-Learning")
+    plt.plot(avg_rewards_sarsa_lambda,  label="SARSA-Lambda")
+    plt.plot(avg_rewards_actor_critic,  label="Actor-Critic")
     plt.xlabel("Episode")
     plt.ylabel("Average Accumulated Reward")
     plt.title("Average Reward vs Episode (10 runs)")
-    plt.plot(avg_rewards_q_learning,  label="Q-Learning")
     plt.legend()
     plt.show()
 
