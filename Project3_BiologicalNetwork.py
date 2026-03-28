@@ -188,7 +188,7 @@ def SARSA_algorithm(gamma, alpha, epsilon, p):
     return avg_rewards
 
 # SARSA-lambda algorithm         
-def SARSA_lambda(gamma, alpha, epsilon, lamda, p):
+def SARSA_lambda(gamma, alpha, epsilon, lamda, p, flag):
     # initializations 
     all_rewards = []
     policies = []
@@ -257,27 +257,29 @@ def SARSA_lambda(gamma, alpha, epsilon, lamda, p):
     ######### AFTER TRAINING ########
 
     # STEP 1: record how many times each of the 16 states is visited during execution
-    state_visits = visited_states(policy, p)
-    print("State visitation counts for SARSA-Lambda algorithm:")
-    print(state_visits.reshape(16,1))
+    if flag == 1:
+        state_visits = visited_states(policy, p)
+        print("State visitation counts for SARSA-Lambda algorithm:")
+        print(state_visits.reshape(16,1))
 
-
-    # STEP 2: Show the optimal policy for all independent runs 
-    action_labels = ['a1','a2','a3','a4'] 
-    # Convert 0 to a1, 1 to a2, 2 to a3, and 3 to a4
-    for run, policy in enumerate(policies):
-        print(f"Run {run+1} optimal policy:")
-        for s_index, action in enumerate(policy):
-            print(states[s_index], "->", action_labels[action]) # mapping of state to action
-    print()
+    if flag == 1:
+        # STEP 2: Show the optimal policy for all independent runs 
+        action_labels = ['a1','a2','a3','a4'] 
+        # Convert 0 to a1, 1 to a2, 2 to a3, and 3 to a4
+        for run, policy in enumerate(policies):
+            print(f"Run {run+1} optimal policy:")
+            for s_index, action in enumerate(policy):
+                print(states[s_index], "->", action_labels[action]) # mapping of state to action
+        print()
     
     # STEP 3: Show average accumulated reward across 10 runs with respect to episode number
     avg_rewards = np.mean(all_rewards, axis=0) # compute average reward across episodes per run
-    plt.plot(avg_rewards)
-    plt.xlabel("Episode")
-    plt.ylabel("Average Accumulated Reward")
-    plt.title("SARSA-Lambda: Average Reward vs Episode (10 runs)")
-    plt.show()
+    if flag == 1:
+        plt.plot(avg_rewards)
+        plt.xlabel("Episode")
+        plt.ylabel("Average Accumulated Reward")
+        plt.title("SARSA-Lambda: Average Reward vs Episode (10 runs)")
+        plt.show()
 
     return avg_rewards
 
@@ -369,6 +371,7 @@ def Q_Learning_algorithm(gamma, alpha, epsilon, p):
 
     return avg_rewards
 
+# Actor-Critic Algorithm
 def Actor_Critic(gamma, alpha, beta, p):
     # initializations 
     all_rewards = []
@@ -402,9 +405,9 @@ def Actor_Critic(gamma, alpha, beta, p):
             for step in range(num_steps):
 
                 # STEP 1: Define policy pi(a|s)
-                preferences = H[s_index]
-                exp_prefs = np.exp(preferences - np.max(preferences))  # stability trick
-                pi = exp_prefs / np.sum(exp_prefs) # pi(.|s) 
+                preferences = H[s_index] # This is H(s,a)
+                exp_prefs = np.exp(preferences)  # This is e^H(s,a)
+                pi = exp_prefs / np.sum(exp_prefs) # pi(.|s) = e^(H(s,a))/sum of e^H(s,a)
 
                 # STEP 2: Select action: at ~ pi(.|s)
                 a = np.random.choice(len(actions), p=pi)
@@ -476,7 +479,7 @@ def main():
     avg_rewards_q_learning = Q_Learning_algorithm(gamma=0.9, alpha = 0.25, epsilon = 0.15, p=0.1)
 
     print("\nRunning the SARSA-Lambda Algorithm")
-    avg_rewards_sarsa_lambda = SARSA_lambda(gamma=0.9, alpha=0.25, epsilon=0.15, lamda=0.95, p=0.1)
+    avg_rewards_sarsa_lambda = SARSA_lambda(gamma=0.9, alpha=0.25, epsilon=0.15, lamda=0.95, p=0.1, flag=1)
 
     print("\nRunning the Acor-Critic Algorithm")
     avg_rewards_actor_critic = Actor_Critic(gamma=0.9, alpha=0.25, beta=0.05, p=0.1)
@@ -492,8 +495,19 @@ def main():
     plt.title("Average Reward vs Episode (10 runs)")
     plt.legend()
     plt.show()
-
-
+    
+    plt.figure(figsize=(10,6))
+    lambda_list = [0, 0.5, 0.95]
+    print("\nRunning the SARSA-Lambda Algorithm for different lambdas")
+    for i in range(3):
+        print("Lambda = ", lambda_list[i])
+        avg_rewards_sarsa_lambda = SARSA_lambda(gamma=0.9, alpha=0.25, epsilon=0.15, lamda=lambda_list[i], p=0.1, flag=0)
+        plt.plot(avg_rewards_sarsa_lambda, label=f"Lambda = {lambda_list[i]}")
+    plt.xlabel("Episode")
+    plt.ylabel("Average Accumulated Reward")
+    plt.title("Average Reward vs Episode (10 runs) for different lambdas")
+    plt.legend()
+    plt.show()
 
 if __name__ == "__main__":
     main()
