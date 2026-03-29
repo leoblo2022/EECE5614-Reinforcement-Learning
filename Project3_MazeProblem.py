@@ -469,7 +469,7 @@ def Q_Learning_algorithm(states, state_index, p, gamma, alpha, epsilon):
 def Actor_Critic_algorithm(states, state_index, p, gamma, alpha, beta):
     # Initializations
     num_rows, num_cols = State_Matrix.shape
-    num_runs = 2
+    num_runs = 10
     num_episodes = 1000
     max_steps = 1000
     all_V = []
@@ -499,7 +499,7 @@ def Actor_Critic_algorithm(states, state_index, p, gamma, alpha, beta):
                 # ---- STEP 1: sample action from softmax policy ----
                 r, c = state
                 H_s = H[r, c, :] # get H(s,a) for all a
-                exp_vals = np.exp(H_s - np.max(H_s))  # for numerical stability
+                exp_vals = np.exp(H_s)  # H(s,a)
                 # get pi(a|s), or probabilities of each policy based on preferences H(s,a)
                 pi = exp_vals / np.sum(exp_vals) # e^H(s,a)/sum_over_a(e^H(s,a))
 
@@ -571,17 +571,18 @@ def main():
                 idx = len(states)
                 states.append((i,j))
                 state_index[(i,j)] = idx
+    
 
     # SARSA ALGORITHM
     print("Evalulating the SARSA Algorithm")
-    optimal_policy, optimal_path, avg_accum_reward = SARSA_algorithm(states, state_index, p=0.025, gamma=0.96, alpha=0.25, epsilon=0.1, flag=1)
+    optimal_policy, optimal_path, avg_accum_reward_sarsa = SARSA_algorithm(states, state_index, p=0.025, gamma=0.96, alpha=0.25, epsilon=0.1, flag=1)
     plot_optimal_policy(states, state_index, optimal_policy)
     plot_optimal_path(optimal_path, toggle=True)
     plt.title("Optimal Path")
     plt.show()
 
     plt.figure(figsize=(10,6))
-    plt.plot(avg_accum_reward)
+    plt.plot(avg_accum_reward_sarsa)
     plt.xlabel("Episode")
     plt.ylabel("Average Accumulated Reward")
     plt.title("SARSA: Average Accumulated Reward vs Episode (10 Runs)")
@@ -589,14 +590,14 @@ def main():
 
     # Q-Learning ALGORITHM
     print("\nEvalulating the Q-Learning Algorithm")
-    optimal_policy, optimal_path, avg_accum_reward = Q_Learning_algorithm(states, state_index, p=0.025, gamma=0.96, alpha=0.25, epsilon=0.1)
+    optimal_policy, optimal_path, avg_accum_reward_q = Q_Learning_algorithm(states, state_index, p=0.025, gamma=0.96, alpha=0.25, epsilon=0.1)
     plot_optimal_policy(states, state_index, optimal_policy)
     plot_optimal_path(optimal_path, toggle=True)
     plt.title("Optimal Path")
     plt.show()
 
     plt.figure(figsize=(10,6))
-    plt.plot(avg_accum_reward)
+    plt.plot(avg_accum_reward_q)
     plt.xlabel("Episode")
     plt.ylabel("Average Accumulated Reward")
     plt.title("Q-Learning: Average Accumulated Reward vs Episode (10 Runs)")
@@ -605,19 +606,31 @@ def main():
 
     # Actor-Critic ALGORITHM
     print("\nEvalulating the Actor-Critic Algorithm")
-    optimal_policy, optimal_path, avg_accum_reward = Actor_Critic_algorithm(states, state_index, p=0.025, gamma=0.96, alpha=0.25, beta=0.05)
+    optimal_policy, optimal_path, avg_accum_reward_actor = Actor_Critic_algorithm(states, state_index, p=0.025, gamma=0.98, alpha=0.25, beta=0.05)
     plot_optimal_policy(states, state_index, optimal_policy)
     plot_optimal_path(optimal_path, toggle=True)
     plt.title("Optimal Path")
     plt.show()
 
     plt.figure(figsize=(10,6))
-    plt.plot(avg_accum_reward)
+    plt.plot(avg_accum_reward_actor)
     plt.xlabel("Episode")
     plt.ylabel("Average Accumulated Reward")
     plt.title("Actor-Critic: Average Accumulated Reward vs Episode (10 Runs)")
     plt.show()
 
+    # show all average accumulated rewards together in same plot
+    plt.figure(figsize=(10,6))
+    plt.plot(avg_accum_reward_sarsa, label="SARSA")
+    plt.plot(avg_accum_reward_q, label="Q-Learning")
+    plt.plot(avg_accum_reward_actor, label="Actor-Critic")
+    plt.xlabel("Episode")
+    plt.ylabel("Average Accumulated Reward")
+    plt.title("All algorithms: Average Accumulated Reward vs Episode")
+    plt.legend()
+    plt.show()
+
+    
     print("\nComparing different learning rates (alpha)")
     alpha_list = [0.05, 0.1, 0.25, 0.5]
     plt.figure(figsize=(10,6))
@@ -630,7 +643,6 @@ def main():
         plt.title("Average Accumulated Reward for Different Learning Rates using SARSA")
         plt.legend()
     plt.show()
-
 
 
 if __name__ == "__main__":
