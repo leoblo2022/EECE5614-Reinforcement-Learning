@@ -63,7 +63,7 @@ class ReplayMemory:
 
     # add the most recent experience (s,a,r,s',done) to replay memory
     def push(self, s, a, r, s_next, done):
-        self.buffer.append((s, a, r, s_next, done))
+        self.replayMemory.append((s, a, r, s_next, done))
 
     # randomly select a minibatch of size Nbatch from the experiences stored in the replay memory
     def sample(self, batch_size):
@@ -234,9 +234,8 @@ def main():
                 states.append((i,j))
                 state_index[(i,j)] = idx
     
-
     # Hyperparameters
-    N_epi = 100
+    N_epi = 1000
     T_epi = 50
     gamma = 0.97
     alpha = 0.01 # 10^-2
@@ -244,6 +243,14 @@ def main():
     batch_size = 64
     N_QU = 5
     eta = 0.01 # 10^-2
+
+    # Initialize average and episodic reward, loss, and length
+    Epi_Rewards = []
+    Epi_Losses = []
+    Epi_Lengths = []
+    Avg_Rewards = []
+    Avg_Losses = []
+    Avg_Lengths = []
 
     Q_network = DQN() # Q-network: first fully connected feed-forward neural network
     target_network = DQN() # Target network: second fully connected feed-forward neural network
@@ -254,8 +261,12 @@ def main():
     # Create the class mreplay memory D 
     memory = ReplayMemory(replay_memory_size)
 
+
+    # TRAINING LOOP
     for episode in range(N_epi):
-        print(episode)
+        episode_reward = 0
+        episode_loss = 0
+        episode_steps = 0
 
         # epsilon decay
         epsilon = max(0.1, 0.995 ** episode)
@@ -263,12 +274,12 @@ def main():
         # random initial state
         state = random.choice(states)
         idx = state_index[state]
-        state = normalize_state(state, grid_size=10)
+        state_norm = normalize_state(state, grid_size=10)
 
         for t in range(T_epi):
-
+            episode_steps += 1
             # Choose action based on epsilon greedy of Q-values produced by Q_network
-            action_idx = select_action_epsilon_greedy(state, epsilon, Q_network)
+            action_idx = select_action_epsilon_greedy(state_norm, epsilon, Q_network)
             action = actions[action_idx]  # convert index → string
 
             # get next state based on transition probabilities
@@ -282,6 +293,7 @@ def main():
 
             # Observe reward
             reward = get_reward(state, next_state)
+            episode_reward += reward
 
             # update the done variable 
             if next_state == goal_state: 
@@ -290,20 +302,61 @@ def main():
                 done = 0
 
             # Add most recent (s,a,r,s',done) to replay memory D
-            memory.push(state, action, reward, next_state_norm, done)
+            memory.push(state_norm, action_idx, reward, next_state_norm, done)
 
             # update: S = S'
-            state = next_state_norm
+            state = next_state
+            state_norm = next_state_norm    # normalized
 
             # Training step
             if len(memory) >= batch_size and t % N_QU == 0:
                 batch = memory.sample(batch_size)
-                train_step(Q_network, target_network, optimizer, batch, gamma)
+                loss = train_step(Q_network, target_network, optimizer, batch, gamma)
                 soft_update(Q_network, target_network, eta)
+                episode_loss += loss
 
             if done:
                 break
 
+        # After each episode ends, append episode reward, loss, and length
+        Epi_Rewards.append(episode_reward)
+        Epi_Losses.append(episode_loss)
+        Epi_Lengths.append(episode_steps)
+
+        # Compute moving average of accumulated reward, loss, and length
+        k = len(Epi_Rewards)
+        m = min(25, k)
+
+        # compute average manually
+        sum_rewards = 0
+        sum_loss = 0
+        sum_length = 0
+        for j in range(m):
+            sum_rewards = sum_rewards + Epi_Rewards[k - 1 - j]
+            sum_loss = sum_loss + Epi_Losses[k - 1 - j] 
+            sum_length = sum_length + Epi_Lengths[k - 1 - j]
+        avg_reward = sum_rewards / m
+        avg_loss = sum_loss / m
+        avg_length = sum_length / m
+
+        Avg_Rewards.append(avg_reward)
+        Avg_Losses.append(avg_loss)
+        Avg_Lengths.append(avg_length)
+
+    plt.figure(figsize=(10,6))
+    plt.plot(Avg_Rewards)
+    plt.title("DQN Average Reward")
+    plt.show()
+
+    plt.figure(figsize=(10,6))
+    plt.plot(Avg_Losses)
+    plt.title("DQN Average Loss")
+    plt.show()
+
+    plt.figure(figsize=(10,6))
+    plt.plot(Avg_Lengths)
+    plt.title("DQN Average Episode Length")
+    plt.show()
 
     print("Got to this point")
 
