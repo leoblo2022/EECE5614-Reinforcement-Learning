@@ -41,6 +41,16 @@ action_dict = {
     'R': (0, 1) # move right a column
 }
 
+# Hyperparameters
+N_epi = 1000
+T_epi = 50
+gamma = 0.97
+alpha = 0.01 # 10^-2
+replay_memory_size = 10000
+batch_size = 64
+N_QU = 5
+eta = 0.01 # 10^-2
+
 # DEFINE ALL CLASSES
 class DQN(nn.Module):
     def __init__(self):
@@ -210,40 +220,9 @@ def soft_update(Q_network, target_network, eta):
         target_w.data.copy_(
             eta * Q_w.data + (1 - eta) * target_w.data
         )
-
-######################################################################################################################################
-# **** MAIN FUNCTION ****
-def main():
-    plt.subplots(figsize=(10,7.5))
-    heatmap = sns.heatmap(State_Matrix, fmt=".2f", linewidths=0.25, linecolor='black',
-                      cbar= False, cmap= 'rocket_r', vmin=0, vmax=255)
-    heatmap.set_facecolor('black') # Color for the NaN cells in the state matrix
-    plt.title('Maze Problem')
-
-    # color blocks for visualization purposes
-    coloring_blocks(heatmap, red_states, yellow_states, start_state, goal_state)
-    plt.show()
-
-    # determine location (indices) and number of valid states (anything but walls)
-    states = []
-    state_index = {}
-    for i in range(State_Matrix.shape[0]):
-        for j in range(State_Matrix.shape[1]):
-            if not np.isnan(State_Matrix[i,j]): # if the cell is not a wall, record its index and add it to a list of valid states
-                idx = len(states)
-                states.append((i,j))
-                state_index[(i,j)] = idx
-    
-    # Hyperparameters
-    N_epi = 1000
-    T_epi = 50
-    gamma = 0.97
-    alpha = 0.01 # 10^-2
-    replay_memory_size = 10000
-    batch_size = 64
-    N_QU = 5
-    eta = 0.01 # 10^-2
-
+        
+# Deep Q Network Algorithm
+def deep_Q_network(Q_network, target_network, states, state_index, optimizer, memory):
     # Initialize average and episodic reward, loss, and length
     Epi_Rewards = []
     Epi_Losses = []
@@ -252,15 +231,7 @@ def main():
     Avg_Losses = []
     Avg_Lengths = []
 
-    Q_network = DQN() # Q-network: first fully connected feed-forward neural network
-    target_network = DQN() # Target network: second fully connected feed-forward neural network
     target_network.load_state_dict(Q_network.state_dict())
-
-    # Adam is used as the optimization technique
-    optimizer = optim.Adam(Q_network.parameters(), lr=alpha)
-    # Create the class mreplay memory D 
-    memory = ReplayMemory(replay_memory_size)
-
 
     # TRAINING LOOP
     for episode in range(N_epi):
@@ -326,8 +297,6 @@ def main():
         # Compute moving average of accumulated reward, loss, and length
         k = len(Epi_Rewards)
         m = min(25, k)
-
-        # compute average manually
         sum_rewards = 0
         sum_loss = 0
         sum_length = 0
@@ -343,6 +312,42 @@ def main():
         Avg_Losses.append(avg_loss)
         Avg_Lengths.append(avg_length)
 
+    return Avg_Rewards, Avg_Losses, Avg_Lengths
+
+######################################################################################################################################
+# **** MAIN FUNCTION ****
+def main():
+    plt.subplots(figsize=(10,7.5))
+    heatmap = sns.heatmap(State_Matrix, fmt=".2f", linewidths=0.25, linecolor='black',
+                      cbar= False, cmap= 'rocket_r', vmin=0, vmax=255)
+    heatmap.set_facecolor('black') # Color for the NaN cells in the state matrix
+    plt.title('Maze Problem')
+
+    # color blocks for visualization purposes
+    coloring_blocks(heatmap, red_states, yellow_states, start_state, goal_state)
+    plt.show()
+
+    # determine location (indices) and number of valid states (anything but walls)
+    states = []
+    state_index = {}
+    for i in range(State_Matrix.shape[0]):
+        for j in range(State_Matrix.shape[1]):
+            if not np.isnan(State_Matrix[i,j]): # if the cell is not a wall, record its index and add it to a list of valid states
+                idx = len(states)
+                states.append((i,j))
+                state_index[(i,j)] = idx
+    
+
+    Q_network = DQN() # Q-network: first fully connected feed-forward neural network
+    target_network = DQN() # Target network: second fully connected feed-forward neural network
+
+    # Adam is used as the optimization technique
+    optimizer = optim.Adam(Q_network.parameters(), lr=alpha)
+    # Create the class mreplay memory D 
+    memory = ReplayMemory(replay_memory_size)
+
+    Avg_Rewards, Avg_Losses, Avg_Lengths = deep_Q_network(Q_network, target_network, states, state_index, optimizer, memory)
+
     plt.figure(figsize=(10,6))
     plt.plot(Avg_Rewards)
     plt.title("DQN Average Reward")
@@ -357,8 +362,6 @@ def main():
     plt.plot(Avg_Lengths)
     plt.title("DQN Average Episode Length")
     plt.show()
-
-    print("Got to this point")
 
 if __name__ == "__main__":
     main()
