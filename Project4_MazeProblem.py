@@ -220,7 +220,47 @@ def soft_update(Q_network, target_network, eta):
         target_w.data.copy_(
             eta * Q_w.data + (1 - eta) * target_w.data
         )
+
+# Helper function that computes the optimal policy pi(s), path, and state values V(s) after training
+def compute_policy_path_and_values(Q_network, states, state_index, grid_size=10):
+    policy = {}      # maps (i,j) → action ('U','D','L','R')
+    state_values = {}  # maps (i,j) → max Q-value
+
+    Q_network.eval()
+
+    with torch.no_grad():
+        # Loop through all states
+        for state in states:
+            state_norm = normalize_state(state, grid_size)
+            state_t = torch.tensor(state_norm).unsqueeze(0)
+
+            q_values = Q_network(state_t).squeeze()  # get Q-values from Q network
+
+            # Find best action by using the argmax of the Q-values
+            best_action_idx = torch.argmax(q_values).item()
+            best_action = actions[best_action_idx]
+
+            # Add final state values and optimal policy pi(s) for each state 
+            policy[state] = best_action
+            state_values[state] = torch.max(q_values).item()
+
+    # Next, compute optimal path, starting from start_state
+    state = start_state
+    path = [state]
+
+    for i in range(100): # define max steps so it doesn't continue forever
+        if state == goal_state:
+            break
         
+        # extract the optimal policy for each state in the path
+        action = policy[state]
+        next_state = move_updates(state, action) # compute the next state based on state and action
+
+        path.append(next_state) # append to final optimal path
+        state = next_state # update s = s'
+
+    return policy, path, state_values
+
 # Deep Q Network Algorithm
 def deep_Q_network(Q_network, target_network, states, state_index, optimizer, memory):
     # Initialize average and episodic reward, loss, and length
@@ -312,7 +352,75 @@ def deep_Q_network(Q_network, target_network, states, state_index, optimizer, me
         Avg_Losses.append(avg_loss)
         Avg_Lengths.append(avg_length)
 
-    return Avg_Rewards, Avg_Losses, Avg_Lengths
+    policy, path, state_values = compute_policy_path_and_values(Q_network, states, state_index, grid_size=10)
+    
+    return Avg_Rewards, Avg_Losses, Avg_Lengths, policy, path, state_values
+
+# Helper function that plots the optimal policy pi(s) on the maze
+def plot_optimal_policy(states, state_index, policy):
+    # plot the value function values on the heat map
+    plt.subplots(figsize=(13,7.5))
+    heatmap = sns.heatmap(State_Matrix, fmt=".2f", linewidths=0.25, linecolor='black',
+                        cbar= False, cmap= 'rocket_r')
+    heatmap.set_facecolor('black') # Color for the NA cells in the state matrix
+    coloring_blocks(heatmap, red_states, yellow_states, start_state, goal_state)
+
+    # go through each row and column
+    for (r, c) in states:
+        if (r, c) == goal_state:
+            continue  # no arrow at goal
+
+        action = policy[(r, c)]
+
+        if action == 'R':
+            plt.arrow(c + 0.5, r + 0.5, 0.6, 0, width=0.04, color='black')
+        elif action == 'L':
+            plt.arrow(c + 0.5, r + 0.5, -0.6, 0, width=0.04, color='black')
+        elif action == 'U':
+            plt.arrow(c + 0.5, r + 0.5, 0, -0.6, width=0.04, color='black')
+        elif action == 'D':
+            plt.arrow(c + 0.5, r + 0.5, 0, 0.6, width=0.04, color='black')
+
+    plt.title("Optimal Policy")
+    plt.show()
+
+# This helper function plots the values V(s) at each state on the maze 
+def plot_value_function(state_values):
+    # Create a fresh matrix for plotting the values
+    # plot the value function values on the heat map
+    plt.subplots(figsize=(13,7.5))
+    Value_Matrix = np.full(State_Matrix.shape, np.nan)
+
+    for (i, j), val in state_values.items():
+       Value_Matrix[i, j] = val
+
+
+    # Plot the new heatmap of the new value function values with the original state and coloring blocks
+    heatmap = sns.heatmap(State_Matrix, fmt=".2f", annot= Value_Matrix, linewidths=0.25, linecolor='black', cbar= False, cmap= 'rocket_r', annot_kws={"size": 8})
+    heatmap.set_facecolor('black') # Color for the NA cells in the state matrix
+    coloring_blocks(heatmap, red_states, yellow_states, start_state, goal_state)
+    plt.title("Optimal Value Function")
+    plt.show()
+
+# This function plots the optimal path from start state to goal state
+def plot_optimal_path(path):
+    # Finally, create a fresh matrix for plotting the optimal path
+    plt.subplots(figsize=(13,7.5))
+    heatmap = sns.heatmap(State_Matrix, fmt=".2f", linewidths=0.25, linecolor='black', cbar= False, cmap= 'rocket_r')
+    heatmap.set_facecolor('black') # Color for the NA cells in the state matrix
+    coloring_blocks(heatmap, red_states, yellow_states, start_state, goal_state)
+
+    for k in range(len(path)-1):
+        r, c = path[k]
+        r_next, c_next = path[k+1]
+
+        dr = r_next - r
+        dc = c_next - c
+
+        plt.arrow(c + 0.5, r + 0.5, dc * 0.8, dr * 0.8, width=0.04, color='black')
+
+    plt.title("Optimal Path")
+    plt.show()
 
 ######################################################################################################################################
 # **** MAIN FUNCTION ****
@@ -346,7 +454,11 @@ def main():
     # Create the class mreplay memory D 
     memory = ReplayMemory(replay_memory_size)
 
-    Avg_Rewards, Avg_Losses, Avg_Lengths = deep_Q_network(Q_network, target_network, states, state_index, optimizer, memory)
+    Avg_Rewards, Avg_Losses, Avg_Lengths, optimal_policy, optimal_path, state_values = deep_Q_network(Q_network, target_network, states, state_index, optimizer, memory)
+    plot_optimal_policy(states, state_index, optimal_policy)
+    plot_value_function(state_values) # plot optimal V(s) on the maze
+    plot_optimal_path(optimal_path)
+
 
     plt.figure(figsize=(10,6))
     plt.plot(Avg_Rewards)
