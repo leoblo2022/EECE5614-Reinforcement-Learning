@@ -425,6 +425,8 @@ def plot_optimal_path(path):
 ######################################################################################################################################
 # **** MAIN FUNCTION ****
 def main():
+    global alpha
+
     plt.subplots(figsize=(10,7.5))
     heatmap = sns.heatmap(State_Matrix, fmt=".2f", linewidths=0.25, linecolor='black',
                       cbar= False, cmap= 'rocket_r', vmin=0, vmax=255)
@@ -459,7 +461,6 @@ def main():
     plot_value_function(state_values) # plot optimal V(s) on the maze
     plot_optimal_path(optimal_path)
 
-
     plt.figure(figsize=(10,6))
     plt.plot(Avg_Rewards)
     plt.title("DQN Average Reward")
@@ -474,6 +475,22 @@ def main():
     plt.plot(Avg_Lengths)
     plt.title("DQN Average Episode Length")
     plt.show()
+
+    # Rerun with much larger and smaller alphas
+    alpha = alpha / 10 # small alpha
+    optimizer = optim.Adam(Q_network.parameters(), lr=alpha)
+    Avg_Reward_small_alpha, Avg_Losses, Avg_Lengths, optimal_policy, optimal_path, state_values = deep_Q_network(Q_network, target_network, states, state_index, optimizer, memory)
+    alpha = (0.01)*10 # big alpha
+    optimizer = optim.Adam(Q_network.parameters(), lr=alpha)
+    Avg_Reward_big_alpha, Avg_Losses, Avg_Lengths, optimal_policy, optimal_path, state_values = deep_Q_network(Q_network, target_network, states, state_index, optimizer, memory)
+    plt.figure(figsize=(10,6))
+    plt.plot(Avg_Rewards, label='Baseline alpha = 0.01')
+    plt.plot(Avg_Reward_small_alpha, label='Small alpha = 0.001')
+    plt.plot(Avg_Reward_big_alpha, label='Big alpha = 0.1')
+    plt.legend()
+    plt.title("Standard DQN with different Learning Rates")
+    plt.show()
+
 
 if __name__ == "__main__":
     main()
