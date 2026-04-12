@@ -186,7 +186,7 @@ def select_action_epsilon_greedy(state, epsilon, Q_network):
             return q_values.argmax().item()
 
 # Performs the training step by minimizing the loss function
-def train_step(Q_network, target_network, optimizer, batch, gamma):
+def train_step(Q_network, target_network, optimizer, batch, gamma, flag):
     states, actions, rewards, next_states, dones = batch # get all (s,a,r,s',done) tuples from minibatch
     states = torch.tensor(states)
     actions = torch.tensor(actions).unsqueeze(1)
@@ -199,9 +199,14 @@ def train_step(Q_network, target_network, optimizer, batch, gamma):
 
     # Target Q-values in target network
     with torch.no_grad():
-        max_next_q = target_network(next_states).max(1, keepdim=True)[0]
-        # Zi = ri + gamma* max(Q^w-)*(1-donei)
-        z = rewards + gamma * max_next_q * (1 - dones)
+        if flag == 1: # Double DQN flag
+            next_actions = Q_network(next_states).argmax(dim=1, keepdim=True) # This is argmax(Q^w(si',a'))
+            next_q = target_network(next_states).gather(1, next_actions) # This is Q^w-(si',..)
+            z = rewards + gamma * next_q * (1 - dones) # zi = ri + gamma* Q^w-(si',argmax(Q^w(si',a')))*(1-donei)
+        else:
+            max_next_q = target_network(next_states).max(1, keepdim=True)[0]
+            # zi = ri + gamma* max(Q^w-)*(1-donei)
+            z = rewards + gamma * max_next_q * (1 - dones)
 
 
     # Define the loss function: L(z,w,w-) = summation of (z-Qw(si,ai))^2
@@ -262,7 +267,7 @@ def compute_policy_path_and_values(Q_network, states, state_index, grid_size=10)
     return policy, path, state_values
 
 # Deep Q Network Algorithm
-def deep_Q_network(Q_network, target_network, states, state_index, optimizer, memory):
+def deep_Q_network(Q_network, target_network, states, state_index, optimizer, memory, flag):
     # Initialize average and episodic reward, loss, and length
     Epi_Rewards = []
     Epi_Losses = []
@@ -322,7 +327,7 @@ def deep_Q_network(Q_network, target_network, states, state_index, optimizer, me
             # Training step
             if len(memory) >= batch_size and t % N_QU == 0:
                 batch = memory.sample(batch_size)
-                loss = train_step(Q_network, target_network, optimizer, batch, gamma)
+                loss = train_step(Q_network, target_network, optimizer, batch, gamma, flag)
                 soft_update(Q_network, target_network, eta)
                 episode_loss += loss
 
@@ -456,7 +461,9 @@ def main():
     # Create the class mreplay memory D 
     memory = ReplayMemory(replay_memory_size)
 
-    Avg_Rewards, Avg_Losses, Avg_Lengths, optimal_policy, optimal_path, state_values = deep_Q_network(Q_network, target_network, states, state_index, optimizer, memory)
+    # PART 1: STANDARD DQN
+    print("Standard DQN")
+    Avg_Rewards, Avg_Losses, Avg_Lengths, optimal_policy, optimal_path, state_values = deep_Q_network(Q_network, target_network, states, state_index, optimizer, memory, flag=0)
     plot_optimal_policy(states, state_index, optimal_policy)
     plot_value_function(state_values) # plot optimal V(s) on the maze
     plot_optimal_path(optimal_path)
@@ -477,12 +484,13 @@ def main():
     plt.show()
 
     # Rerun with much larger and smaller alphas
+    print("\nComparing different alphas with standard DQN")
     alpha = alpha / 10 # small alpha
     optimizer = optim.Adam(Q_network.parameters(), lr=alpha)
-    Avg_Reward_small_alpha, Avg_Losses, Avg_Lengths, optimal_policy, optimal_path, state_values = deep_Q_network(Q_network, target_network, states, state_index, optimizer, memory)
+    Avg_Reward_small_alpha, Avg_Losses, Avg_Lengths, optimal_policy, optimal_path, state_values = deep_Q_network(Q_network, target_network, states, state_index, optimizer, memory, flag=0)
     alpha = (0.01)*10 # big alpha
     optimizer = optim.Adam(Q_network.parameters(), lr=alpha)
-    Avg_Reward_big_alpha, Avg_Losses, Avg_Lengths, optimal_policy, optimal_path, state_values = deep_Q_network(Q_network, target_network, states, state_index, optimizer, memory)
+    Avg_Reward_big_alpha, Avg_Losses, Avg_Lengths, optimal_policy, optimal_path, state_values = deep_Q_network(Q_network, target_network, states, state_index, optimizer, memory, flag=0)
     plt.figure(figsize=(10,6))
     plt.plot(Avg_Rewards, label='Baseline alpha = 0.01')
     plt.plot(Avg_Reward_small_alpha, label='Small alpha = 0.001')
@@ -490,6 +498,37 @@ def main():
     plt.legend()
     plt.title("Standard DQN with different Learning Rates")
     plt.show()
+
+    # PART 2: DOUBLE DQN
+    print("\nDouble DQN")
+    alpha = 0.01 # back to regular alpha
+    optimizer = optim.Adam(Q_network.parameters(), lr=alpha)
+    doubleDQN_Reward, doubleDQN_Losses, doubleDQN_Lengths, optimal_policy, optimal_path, state_values = deep_Q_network(Q_network, target_network, states, state_index, optimizer, memory, flag=1)
+    plot_optimal_policy(states, state_index, optimal_policy)
+    plot_value_function(state_values) # plot optimal V(s) on the maze
+    plot_optimal_path(optimal_path)
+
+    plt.figure(figsize=(10,6))
+    plt.plot(Avg_Rewards, label="standard DQN")
+    plt.plot(doubleDQN_Reward,  label="double DQN")
+    plt.title("DQN vs. double DQN Average Reward")
+    plt.legend()
+    plt.show()
+
+    plt.figure(figsize=(10,6))
+    plt.plot(Avg_Losses, label="standard DQN")
+    plt.plot(doubleDQN_Losses, label="double DQN")
+    plt.title("DQN vs. double DQN Average Loss")
+    plt.legend()
+    plt.show()
+
+    plt.figure(figsize=(10,6))
+    plt.plot(Avg_Lengths, label="standard DQN")
+    plt.plot(doubleDQN_Lengths, label="double DQN")
+    plt.title("DQN vs, double DQN Average Episode Length")
+    plt.legend()
+    plt.show()
+
 
 
 if __name__ == "__main__":
